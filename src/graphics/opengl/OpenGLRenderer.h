@@ -112,6 +112,8 @@ public:
 	
 	inline bool isInitialized() { return initialized; }
 	
+	void setGamma(float brightness, float contrast, float gamma);
+
 private:
 	
 	bool useVertexArrays;

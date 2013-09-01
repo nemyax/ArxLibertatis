@@ -709,6 +709,11 @@ bool OpenGLRenderer::isFogInEyeCoordinates() {
 	return true;
 }
 
+void OpenGLRenderer::setGamma(float brightness, float contrast, float gamma)
+{
+	postProcessing->setGamma(brightness, contrast, gamma);
+}
+
 const char * getGLErrorString(GLenum error) {
 	switch(error) {
 		case GL_NO_ERROR: return "GL_NO_ERROR";

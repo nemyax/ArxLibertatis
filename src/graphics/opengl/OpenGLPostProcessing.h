@@ -18,6 +18,8 @@ public:
 
 	void render();
 
+	void setGamma(float brightness, float contrast, float gamma);
+
 private:
 	Rect mSize;
 
@@ -38,8 +40,13 @@ private:
 	GLuint uniform_fbo_texture;
 
 	GLuint mUniformGamma;
+	GLuint mUniformLuminosity;
 
 	GLuint createShader();
+
+	float mGamma;
+	float mLuminosity;
+	float mContrast;
 };
 
 #endif

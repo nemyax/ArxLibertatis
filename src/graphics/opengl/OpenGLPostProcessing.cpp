@@ -49,9 +49,18 @@ static const char nopVertexShaderSource[] =
 static const char nopFragmentShaderSource[] =
 	"uniform sampler2D fbo_texture; \n"
 	"varying vec2 f_texcoord; \n"
-	" \n"
+	"\n"
+	"uniform float gamma; \n"
+	"\n"
+	"\n"
+	"\n"
+	"\n"
 	"void main(void) { \n"
-	"	gl_FragColor = texture2D(fbo_texture, f_texcoord); \n"
+	"	vec3 color = texture2D(fbo_texture, f_texcoord); \n"
+	"\n"
+	"	gl_FragColor.rgb = pow(color, vec3(1.0 / gamma)); \n"
+	"	gl_FragColor.a = 1.0; \n"
+	"\n"
 	"} \n";
 
 GLuint OpenGLPostProcesing::createShader()
@@ -250,7 +259,8 @@ void OpenGLPostProcesing::render()
 
 	glUniform1i(uniform_fbo_texture, /*GL_TEXTURE*/0);
 
-	glUniform1f(mUniformGamma, 1.f);
+	//glUniform1f(mUniformGamma, 1.f);
+	glUniform1f(mUniformGamma, mGamma);
 
 
 	glEnableVertexAttribArray(attribute_v_coord_postproc);
@@ -269,4 +279,35 @@ void OpenGLPostProcesing::render()
 	glDisableVertexAttribArray(attribute_v_coord_postproc);
 
 	glUseProgram(oldProgram);
+}
+
+void OpenGLPostProcesing::setGamma(float brightness, float contrast, float gamma)
+{
+	float fGammaMax = (1.f / 6.f);
+	float fGammaMin = 2.f;
+	mGamma = ((fGammaMax - fGammaMin) / 11.f) * (gamma + 1.f) + fGammaMin;
+
+	float fLuminosityMin = -.2f;
+	float fLuminosityMax = .2f;
+	mLuminosity = ((fLuminosityMax - fLuminosityMin) / 11.f) * (brightness + 1.f) + fLuminosityMin;
+
+	float fContrastMax = -.3f;
+	float fContrastMin = .3f;
+	mContrast = ((fContrastMax - fContrastMin) / 11.f) * (contrast + 1.f) + fContrastMin;
+
+	/*
+	u16 ramp[256];
+	float fRangeMin = 0.f + fContrast;
+	float fRangeMax = 1.f - fContrast;
+	float fdVal = (fRangeMax - fRangeMin) / 256.f;
+	float fVal = 0.f;
+
+	for(size_t i = 0; i < 256; i++) {
+
+		int iColor = clamp(int(65536.f * (fLuminosity + pow(fVal, fGamma))), 0, 65535);
+
+		ramp[i] = static_cast<u16>(iColor);
+
+		fVal += fdVal;
+	}*/
 }

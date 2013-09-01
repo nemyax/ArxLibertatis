@@ -137,17 +137,17 @@ void ARXMenu_Options_Video_SetFogDistance(int _iFog) {
 
 void ARXMenu_Options_Video_SetGamma(int _iGamma) {
 	config.video.gamma = _iGamma;
-	mainApp->getWindow()->setGamma(config.video.luminosity, config.video.contrast, config.video.gamma);
+	GRenderer->setGamma(config.video.luminosity, config.video.contrast, config.video.gamma);
 }
 
 void ARXMenu_Options_Video_SetLuminosity(int _iLuminosity) {
 	config.video.luminosity = _iLuminosity;
-	mainApp->getWindow()->setGamma(config.video.luminosity, config.video.contrast, config.video.gamma);
+	GRenderer->setGamma(config.video.luminosity, config.video.contrast, config.video.gamma);
 }
 
 void ARXMenu_Options_Video_SetContrast(int _iContrast) {
 	config.video.contrast = _iContrast;
-	mainApp->getWindow()->setGamma(config.video.luminosity, config.video.contrast, config.video.gamma);
+	GRenderer->setGamma(config.video.luminosity, config.video.contrast, config.video.gamma);
 }
 
 extern long MAX_FRAME_COUNT;
