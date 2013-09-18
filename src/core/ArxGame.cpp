@@ -111,6 +111,8 @@ ZeniMax Media Inc., Suite 120, Rockville, Maryland 20850 USA.
 #include "math/Vector2.h"
 #include "math/Vector3.h"
 
+#include "physics/Physics.h"
+
 #include "io/fs/FilePath.h"
 #include "io/fs/SystemPaths.h"
 #include "io/resource/PakReader.h"

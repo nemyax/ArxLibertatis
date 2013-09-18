@@ -80,6 +80,7 @@ ZeniMax Media Inc., Suite 120, Rockville, Maryland 20850 USA.
 
 #include "platform/Platform.h"
 
+#include "physics/bullet/BulletPhysicsBackend.h"
 #include "physics/Box.h"
 #include "physics/Collisions.h"
 
@@ -614,6 +615,9 @@ extern EERIE_3DOBJ * arrowobj;
 long ARX_THROWN_OBJECT_Throw(long source, Vec3f * position, Vec3f * vect,
                              EERIE_QUAT * quat, float velocity, float damages, float poison) {
 	
+
+
+
 	long num = ARX_THROWN_OBJECT_GetFree();
 
 	if(num >= 0) {
@@ -650,6 +654,7 @@ long ARX_THROWN_OBJECT_Throw(long source, Vec3f * position, Vec3f * vect,
 				thrownObj->flags |= ATO_FIERY;
 		}
 
+		g_bulletPhysics->ThrowArrow(thrownObj);
 	}
 
 	return num;

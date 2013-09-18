@@ -47,6 +47,10 @@ ZeniMax Media Inc., Suite 120, Rockville, Maryland 20850 USA.
 #ifndef ARX_PHYSICS_PHYSICS_H
 #define ARX_PHYSICS_PHYSICS_H
 
+#include "ai/Paths.h"
+
+#include "graphics/BaseGraphicsTypes.h"
+
 struct EERIEPOLY;
 
 EERIEPOLY * BCCheckInPoly(float x, float y, float z);

@@ -48,9 +48,17 @@ ZeniMax Media Inc., Suite 120, Rockville, Maryland 20850 USA.
 
 #include <stddef.h>
 
+#include <BulletCollision/CollisionShapes/btBvhTriangleMeshShape.h>
+
+#include "game/Equipment.h"
+
 #include "graphics/GraphicsTypes.h"
 #include "graphics/data/Mesh.h"
 #include "math/Vector3.h"
+
+#include "graphics/Draw.h"
+
+#include "io/log/Logger.h"
 
 EERIEPOLY * BCCheckInPoly(float x, float y, float z)
 {

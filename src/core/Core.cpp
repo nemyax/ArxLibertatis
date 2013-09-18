@@ -128,6 +128,7 @@ ZeniMax Media Inc., Suite 120, Rockville, Maryland 20850 USA.
 #include "math/Vector2.h"
 #include "math/Vector3.h"
  
+#include "physics/bullet/BulletPhysicsBackend.h"
 #include "physics/Collisions.h"
 #include "physics/Attractors.h"
 
@@ -544,6 +545,8 @@ static bool initializeGame() {
 	
 	CalcFPS(true);
 	
+	g_bulletPhysics = new BulletPhysicsBackend;
+
 	g_miniMap.mapMarkerInit();
 	
 	memset(scursor, 0, sizeof(scursor));

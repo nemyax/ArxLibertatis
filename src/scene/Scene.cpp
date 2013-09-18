@@ -82,6 +82,8 @@ ZeniMax Media Inc., Suite 120, Rockville, Maryland 20850 USA.
 #include "scene/Light.h"
 #include "scene/Interactive.h"
 
+#include "physics/bullet/BulletPhysicsBackend.h"
+
 using std::vector;
 
 extern TextureContainer *enviro;
@@ -1743,7 +1745,9 @@ void ARX_SCENE_Update() {
 		}
 	}
 
-	ARX_THROWN_OBJECT_Manage(checked_range_cast<unsigned long>(framedelay));
+	//ARX_THROWN_OBJECT_Manage(checked_range_cast<unsigned long>(framedelay));
+
+	g_bulletPhysics->Step(framedelay);
 }
 
 extern short uw_mode;
@@ -1764,6 +1768,8 @@ void ARX_SCENE_Render() {
 
 		ARX_PORTALS_Frustrum_RenderRoomTCullSoftRender(RoomDrawList[i]);
 	}
+
+	g_bulletPhysics->DrawBackgroundMesh();
 
 	if(!Project.improve) {
 		ARXDRAW_DrawInterShadows();
