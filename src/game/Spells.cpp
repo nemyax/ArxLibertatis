@@ -6980,10 +6980,12 @@ static void ApplyCurPNux() {
 	strcpy(sp_max_ch,"! PhilNux & Gluonne !");
 	sp_max_nb=strlen(sp_max_ch);
 	
-	SPECIAL_PNUX = (SPECIAL_PNUX + 1) % 3;
-	
-	// TODO-RENDERING: Create a post-processing effect for that cheat... see original source...
-	
+	SPECIAL_PNUX += 1;
+
+	if(SPECIAL_PNUX > 3) {
+		SPECIAL_PNUX = 0;
+	}
+
 	cur_pnux=0;
 	sp_max_start=arxtime.get_updated();
 }

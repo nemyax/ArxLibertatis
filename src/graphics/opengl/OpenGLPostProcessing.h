@@ -42,6 +42,8 @@ private:
 	GLuint mUniformGamma;
 	GLuint mUniformLuminosity;
 
+	GLuint mUniformPnuxEffect;
+
 	GLuint createShader();
 
 	float mGamma;

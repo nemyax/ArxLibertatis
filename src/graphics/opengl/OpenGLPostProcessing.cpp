@@ -51,12 +51,53 @@ static const char nopFragmentShaderSource[] =
 	"varying vec2 f_texcoord; \n"
 	"\n"
 	"uniform float gamma; \n"
-	"\n"
-	"\n"
+	"uniform int pnuxEffect;\n"
 	"\n"
 	"\n"
 	"void main(void) { \n"
 	"	vec3 color = texture2D(fbo_texture, f_texcoord); \n"
+	"\n"
+	"	if(pnuxEffect == 1) { \n"
+	"		float power = (color.x + color.y + color.z) * 0.6; \n"
+	"		if(power > 0.745) { \n"
+	"			color.x = power; \n"
+	"			color.y = power * 0.3; \n"
+	"			color.z = power * 0.7; \n"
+	"		} else { \n"
+	"			color.x = power * 0.7; \n"
+	"			color.y = power * 0.5; \n"
+	"			color.z = power; \n"
+	"		}\n"
+	"	} else if(pnuxEffect == 2) { \n"
+	"		float power = (color.x + color.y + color.z) * (1.0/3.0); \n"
+	"		if(power > color.x * 0.75) { \n"
+	"			color.y = color.x * 0.6; \n"
+	"			color.z = color.x * 0.5; \n"
+	"		} else { \n"
+	"			color.y = color.x * 0.3; \n"
+	"			color.z = color.x * 0.1; \n"
+	"		} \n"
+	"\n"
+	"		color.x *= 1.3; \n"
+	"		color.y *= 1.5; \n"
+	"		color.z *= 1.5; \n"
+	"\n"
+	"		if(power > 0.7843) { \n"
+	"			color.x += (power - 0.7843) * (1.0/5.0); \n"
+	"			color.y += (power - 0.7843) * (1.0/4.0); \n"
+	"			color.z += (power - 0.7843) * (1.0/3.0); \n"
+	"		} \n"
+	"	} else if(pnuxEffect == 3) { \n"
+	"		float power = (color.x + color.y + color.z) * (1.0/3.0) * 1.2; \n"
+	"		color.x = power; \n"
+	"		color.y = power; \n"
+	"		color.z = power; \n"
+	"	} \n"
+	"\n"
+	"\n"
+	"\n"
+	"\n"
+	"\n"
 	"\n"
 	"	gl_FragColor.rgb = pow(color, vec3(1.0 / gamma)); \n"
 	"	gl_FragColor.a = 1.0; \n"
@@ -99,6 +140,7 @@ GLuint OpenGLPostProcesing::createShader()
 	glShaderSourceARB(fragObj, 1, &fragSource, NULL);
 	glCompileShaderARB(fragObj);
 	if(!checkShader(fragObj, "compile", GL_OBJECT_COMPILE_STATUS_ARB)) {
+		CHECK_GL;
 		glDeleteObjectARB(fragObj);
 		glDeleteObjectARB(shader);
 		return 0;
@@ -135,6 +177,13 @@ GLuint OpenGLPostProcesing::createShader()
 	if(mUniformGamma == -1) {
 		LogWarning << "Could not bind uniform: " << uniform_name;
 	}
+
+	uniform_name = "pnuxEffect";
+	mUniformPnuxEffect = glGetUniformLocation(shader, uniform_name);
+	if(mUniformPnuxEffect == -1) {
+		LogWarning << "Could not bind uniform: " << uniform_name;
+	}
+
 	return shader;
 }
 
@@ -242,6 +291,8 @@ void OpenGLPostProcesing::attach()
 	glClear(GL_COLOR_BUFFER_BIT|GL_DEPTH_BUFFER_BIT);
 }
 
+extern long SPECIAL_PNUX;
+
 void OpenGLPostProcesing::render()
 {
 	GLuint oldProgram;
@@ -261,6 +312,8 @@ void OpenGLPostProcesing::render()
 
 	//glUniform1f(mUniformGamma, 1.f);
 	glUniform1f(mUniformGamma, mGamma);
+
+	glUniform1i(mUniformPnuxEffect, SPECIAL_PNUX);
 
 
 	glEnableVertexAttribArray(attribute_v_coord_postproc);
