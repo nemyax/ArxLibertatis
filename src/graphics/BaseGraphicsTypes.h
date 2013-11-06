@@ -44,13 +44,27 @@ ZeniMax Media Inc., Suite 120, Rockville, Maryland 20850 USA.
 #ifndef ARX_GRAPHICS_BASEGRAPHICSTYPES_H
 #define ARX_GRAPHICS_BASEGRAPHICSTYPES_H
 
-#include "math/Vector3.h"
+#include "math/Vector.h"
 
 struct EERIE_QUAT {
 	float x;
 	float y;
 	float z;
 	float w;
+
+	EERIE_QUAT()
+		: x(0.f)
+		, y(0.f)
+		, z(0.f)
+		, w(1.f)
+	{}
+
+	EERIE_QUAT(float x, float y, float z, float w)
+		: x(x)
+		, y(y)
+		, z(z)
+		, w(w)
+	{}
 };
 
 struct EERIEMATRIX {
@@ -58,6 +72,20 @@ struct EERIEMATRIX {
 	float _21, _22, _23, _24;
 	float _31, _32, _33, _34;
 	float _41, _42, _43, _44;
+
+	EERIEMATRIX() {
+		_11=0, _12=0, _13=0, _14=0;
+		_21=0, _22=0, _23=0, _24=0;
+		_31=0, _32=0, _33=0, _34=0;
+		_41=0, _42=0, _43=0, _44=0;
+	}
+
+	void setToIdentity() {
+		_11 = 1.f; _21 = 0.f; _31 = 0.f; _41 = 0.f;
+		_12 = 0.f; _22 = 1.f; _32 = 0.f; _42 = 0.f;
+		_13 = 0.f; _23 = 0.f; _33 = 1.f; _43 = 0.f;
+		_14 = 0.f; _24 = 0.f; _34 = 0.f; _44 = 1.f;
+	}
 };
 
 struct EERIE_CYLINDER {
@@ -77,9 +105,34 @@ struct EERIE_SPHERE {
 	
 };
 
+struct EERIE_2D_BBOX {
+	Vec2f min;
+	Vec2f max;
+
+	void reset() {
+		min.y = min.x = 32000;
+		max.y = max.x = -32000;
+	}
+
+	void add(const Vec3f & pos) {
+		min = glm::min(min, Vec2f(pos));
+		max = glm::max(max, Vec2f(pos));
+	}
+};
+
 struct EERIE_3D_BBOX {
 	Vec3f min;
 	Vec3f max;
+
+	void reset() {
+		min = Vec3f(99999999.f);
+		max = Vec3f(-99999999.f);
+	}
+
+	void add(const Vec3f & pos) {
+		min = glm::min(min, pos);
+		max = glm::max(max, pos);
+	}
 };
 
 enum Material {

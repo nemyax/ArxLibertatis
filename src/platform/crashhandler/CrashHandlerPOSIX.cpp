@@ -21,11 +21,11 @@
 
 #include "Configure.h"
 
-#ifdef ARX_HAVE_BACKTRACE
+#if ARX_HAVE_BACKTRACE
 #include <execinfo.h>
 #endif
 
-#ifdef ARX_HAVE_PRCTL
+#if ARX_HAVE_PRCTL
 #include <sys/prctl.h>
 #ifndef PR_SET_PTRACER
 #define PR_SET_PTRACER 0x59616d61
@@ -38,10 +38,8 @@
 
 #include <iostream>
 
-#include "platform/Environment.h"
 
-
-#ifdef ARX_HAVE_SIGACTION
+#if ARX_HAVE_SIGACTION
 
 static void signalHandler(int signal, siginfo_t * info, void * context) {
 	ARX_UNUSED(context);
@@ -105,7 +103,7 @@ bool CrashHandlerPOSIX::initialize() {
 	
 	m_pCrashInfo->signal = 0;
 	
-#ifdef ARX_HAVE_PRCTL
+#if ARX_HAVE_PRCTL
 	// Allow all processes in the same pid namespace to PTRACE this process
 	prctl(PR_SET_PTRACER, getpid());
 #endif
@@ -120,16 +118,6 @@ CrashHandlerPOSIX::~CrashHandlerPOSIX() {
 CrashHandlerPOSIX& CrashHandlerPOSIX::getInstance() {
 	arx_assert(m_sInstance != 0);
 	return *m_sInstance;
-}
-
-void CrashHandlerPOSIX::fillBasicCrashInfo() {
-	CrashHandlerImpl::fillBasicCrashInfo();
-	std::string exe = getExecutablePath();
-	if(exe.length() < ARRAY_SIZE(m_pCrashInfo->execFullName)) {
-		strcpy(m_pCrashInfo->execFullName, exe.c_str());
-	} else {
-		m_pCrashInfo->execFullName[0] = '\0';
-	}
 }
 
 bool CrashHandlerPOSIX::registerCrashHandlers() {
@@ -222,7 +210,7 @@ void CrashHandlerPOSIX::handleCrash(int signal, int code) {
 	m_pCrashInfo->code = code;
 	
 	// Store the backtrace in the shared crash info
-	#ifdef ARX_HAVE_BACKTRACE
+	#if ARX_HAVE_BACKTRACE
 		backtrace(m_pCrashInfo->backtrace, ARRAY_SIZE(m_pCrashInfo->backtrace));
 	#endif
 	
@@ -236,21 +224,13 @@ void CrashHandlerPOSIX::handleCrash(int signal, int code) {
 		}
 	}
 	
-	char arguments[256];
-	strcpy(arguments, "-crashinfo=");
-	strcat(arguments, m_SharedMemoryName.c_str());
-	
-	// Try a the crash reporter in the same directory as arx or in the current directory.
-#ifdef ARX_HAVE_EXECL
-	if(!m_CrashHandlerPath.empty()) {
-		execl(m_CrashHandlerPath.string().c_str(), m_CrashHandlerPath.string().c_str(),
-		      arguments, NULL);
-	}
-#endif
-	
-	// Try a crash reporter in the system path.
-#ifdef ARX_HAVE_EXECLP
-	execlp(m_CrashHandlerApp.c_str(), m_CrashHandlerApp.c_str(), arguments, NULL);
+	// Try to execute the crash reporter
+#ifdef ARX_HAVE_EXECVP
+	char argument[256];
+	strcpy(argument, "-crashinfo=");
+	strcat(argument, m_SharedMemoryName.c_str());
+	const char * args[] = { m_CrashHandlerPath.string().c_str(), argument, NULL };
+	execvp(m_CrashHandlerPath.string().c_str(), const_cast<char **>(args));
 #endif
 	
 	// Something went wrong - the crash reporter failed to start!

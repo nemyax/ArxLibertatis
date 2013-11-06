@@ -24,11 +24,9 @@
 
 #include "platform/Platform.h"
 
-enum ExitStatus {
-	ExitSuccess,
-	ExitFailure,
-	RunProgram
-};
+namespace fs { class path; }
+
+namespace platform {
 
 std::string expandEnvironmentVariables(const std::string & in);
 
@@ -37,12 +35,26 @@ bool getSystemConfiguration(const std::string & name, std::string & result);
 void defineSystemDirectories(const char * argv0);
 
 //! Get the path to the current running executable if possible or an empty string otherwise.
-std::string getExecutablePath();
+fs::path getExecutablePath();
+
+/*!
+ * Get the full path to a helper executable
+ *
+ * Tries to find a helper executable in the same directory as the current program, in the
+ * parent directory, or in the libexec directory in the prefix where arx is installed.
+ * If found, returns a full path to the executable.
+ * Otherwise, returns a relative path containing only the executable name.
+ *
+ * @return a path or name suitable for CreateProcess(), exec*p() or system() calls.
+ */
+fs::path getHelperExecutable(const std::string & name);
 
 #if ARX_PLATFORM != ARX_PLATFORM_WIN32
 static const char * const env_list_seperators = ":";
 #else
 static const char * const env_list_seperators = ";";
 #endif
+
+} // namespace platform
 
 #endif // ARX_PLATFORM_ENVIRONMENT_H

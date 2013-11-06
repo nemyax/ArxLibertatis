@@ -48,7 +48,8 @@ ZeniMax Media Inc., Suite 120, Rockville, Maryland 20850 USA.
 #include <vector>
 
 #include "graphics/Color.h"
-#include "math/Vector3.h"
+#include "math/Vector.h"
+#include "game/Camera.h"
 
 // TODO macros
 //fx
@@ -83,7 +84,7 @@ public:
 	C_KEY * next;
 	
 	CinematicLight() {
-		pos = Vec3f::ZERO;
+		pos = Vec3f_ZERO;
 		fallin = 100.f;
 		fallout = 200.f;
 		color = Color3f::white * 255.f;
@@ -143,6 +144,9 @@ public:
 	void DeleteDeviceObjects();
 
 	void DeleteAllBitmap();
+
+private:
+	EERIE_CAMERA	m_camera;
 };
 
 void DrawGrille(CinematicGrid * grille, int col, int fx, CinematicLight * light, Vec3f * posgrillesuiv, float angzgrillesuiv);

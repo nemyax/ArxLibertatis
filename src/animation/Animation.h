@@ -50,47 +50,117 @@ ZeniMax Media Inc., Suite 120, Rockville, Maryland 20850 USA.
 #include <stddef.h>
 #include <string>
 
-#include "math/MathFwd.h"
+#include "math/Types.h"
+#include "graphics/BaseGraphicsTypes.h"
+#include "graphics/GraphicsTypes.h"
 
-class TextureContainer;
 class Entity;
-struct EERIE_3DOBJ;
-struct EERIE_LIGHT;
-struct ANIM_USE;
-struct EERIEMATRIX;
-struct EERIE_MOD_INFO;
-struct TexturedVertex;
 
-const size_t HALOMAX = 2000;
-extern long MAX_LLIGHTS;
-const size_t MAX_ANIMATIONS = 900;
+struct EERIE_FRAME
+{
+	long		num_frame;
+	long		flag;
+	int			master_key_frame;
+	short		f_translate; //int
+	short		f_rotate; //int
+	float		time;
+	Vec3f	translate;
+	EERIE_QUAT	quat;
+	audio::SampleId	sample;
+};
 
-extern long HALOCUR;
-extern TexturedVertex LATERDRAWHALO[HALOMAX * 4];
-extern EERIE_LIGHT * llights[32];
+struct EERIE_GROUP
+{
+	int		key;
+	Vec3f	translate;
+	EERIE_QUAT	quat;
+	Vec3f	zoom;
+};
+
+struct EERIE_ANIM
+{
+	long		anim_time;
+	unsigned long	flag;
+	long		nb_groups;
+	long		nb_key_frames;
+	EERIE_FRAME *	frames;
+	EERIE_GROUP  *  groups;
+	unsigned char *	voidgroups;
+};
+
+struct ANIM_HANDLE {
+
+	ANIM_HANDLE();
+
+	res::path path; // empty path means an unallocated slot
+	EERIE_ANIM ** anims;
+	short alt_nb;
+	long locks;
+};
+
+// Animation playing flags
+enum AnimUseTypeFlag {
+	EA_LOOP			= 1,	// Must be looped at end (indefinitely...)
+	EA_REVERSE		= 2,	// Is played reversed (from end to start)
+	EA_PAUSED		= 4,	// Is paused
+	EA_ANIMEND		= 8,	// Has just finished
+	EA_STATICANIM	= 16,	// Is a static Anim (no movement offset returned).
+	EA_STOPEND		= 32,	// Must Be Stopped at end.
+	EA_FORCEPLAY	= 64,	// User controlled... MUST be played...
+	EA_EXCONTROL	= 128	// ctime externally set, no update.
+};
+DECLARE_FLAGS(AnimUseTypeFlag, AnimUseType)
+DECLARE_FLAGS_OPERATORS(AnimUseType)
+
+struct ANIM_USE {
+
+	ANIM_USE()
+		: next_anim(NULL)
+		, cur_anim(NULL)
+		, altidx_next(0)
+		, altidx_cur(0)
+		, flags(0)
+		, nextflags(0)
+		, lastframe(-1)
+		, pour(0.f)
+		, fr(0)
+	{}
+
+	ANIM_HANDLE * next_anim;
+	ANIM_HANDLE * cur_anim;
+	short altidx_next; // idx to alternate anims...
+	short altidx_cur; // idx to alternate anims...
+	long ctime;
+	AnimUseType flags;
+	AnimUseType nextflags;
+	long lastframe;
+	float pour;
+	long fr;
+};
+
+short ANIM_GetAltIdx(ANIM_HANDLE * ah,long old);
+void ANIM_Set(ANIM_USE * au,ANIM_HANDLE * anim);
+
+void GetAnimTotalTranslate( ANIM_HANDLE * eanim,long alt_idx,Vec3f * pos);
 
 long EERIE_ANIMMANAGER_Count(std::string & tex, long * memsize);
 void EERIE_ANIMMANAGER_ClearAll();
-void llightsInit();
-void Preparellights(Vec3f * pos);
-void Insertllight(EERIE_LIGHT * el, float dist);
+void EERIE_ANIMMANAGER_PurgeUnused();
+void EERIE_ANIMMANAGER_ReleaseHandle(ANIM_HANDLE * anim);
+ANIM_HANDLE * EERIE_ANIMMANAGER_Load(const res::path & path);
+ANIM_HANDLE * EERIE_ANIMMANAGER_Load_NoWarning(const res::path & path);
 
-void PopAllTriangleList();
-void PopAllTriangleListTransparency();
+void PrepareAnim(ANIM_USE *eanim, unsigned long time, Entity *io);
+void ResetAnim(ANIM_USE * eanim);
 
-TexturedVertex * PushVertexInTableCull(TextureContainer * tex);
-TexturedVertex * PushVertexInTableCull_TNormalTrans(TextureContainer * tex);
-TexturedVertex * PushVertexInTableCull_TAdditive(TextureContainer * tex);
-TexturedVertex * PushVertexInTableCull_TSubstractive(TextureContainer * tex);
-TexturedVertex * PushVertexInTableCull_TMultiplicative(TextureContainer * tex);
-
-void CalculateInterZMapp(EERIE_3DOBJ * _pobj3dObj, long lIdList, long * _piInd, TextureContainer * _pTex, TexturedVertex * _pVertex);
 void EERIE_ANIMMANAGER_ReloadAll();
 
-void EERIEDrawAnimQuat(EERIE_3DOBJ * eobj, ANIM_USE * eanim, Anglef * angle, Vec3f  * pos, unsigned long time, Entity * io, bool render = true, bool update_movement = true);
+void AcquireLastAnim(Entity * io);
+void FinishAnim(Entity * io,ANIM_HANDLE * eanim);
 
-void DrawEERIEInterMatrix(EERIE_3DOBJ * eobj, EERIEMATRIX * mat, Vec3f  * pos, Entity * io, EERIE_MOD_INFO * modinfo = NULL);
+void ARX_SOUND_PushAnimSamples();
+void ARX_SOUND_PopAnimSamples();
 
-void DrawEERIEInter(EERIE_3DOBJ * eobj, Anglef * angle, Vec3f * pos, Entity * io, EERIE_MOD_INFO * modinfo = NULL);
+void ReleaseAnimFromIO(Entity * io,long num);
 
 #endif // ARX_ANIMATION_ANIMATION_H

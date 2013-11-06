@@ -53,7 +53,7 @@ ZeniMax Media Inc., Suite 120, Rockville, Maryland 20850 USA.
 #include "graphics/Color.h"
 #include "graphics/data/Mesh.h"
 #include "io/resource/ResourcePath.h"
-#include "math/MathFwd.h"
+#include "math/Types.h"
 
 #include "Configure.h"
 
@@ -74,17 +74,15 @@ extern EERIE_3DOBJ * markerobj;
 extern Vec3f lastteleport;
 extern EERIE_CAMERA bookcam;
 extern Vec2s DANAEMouse;
-extern EERIE_CAMERA subj, mapcam;
+extern EERIE_CAMERA subj;
 extern Vec3f moveto;
 extern Vec2s STARTDRAG;
 extern EERIE_3DOBJ * GoldCoinsObj[MAX_GOLD_COINS_VISUALS];
-extern EERIE_3DOBJ * nodeobj;
 extern Vec3f Mscenepos;
-#ifdef BUILD_EDIT_LOADSAVE
+#if BUILD_EDIT_LOADSAVE
 extern EERIE_MULTI3DSCENE * mse;
 extern long ADDED_IO_NOT_SAVED;
 #endif
-extern EERIE_CAMERA * Kam;
 extern Entity * COMBINE;
 extern res::path LastLoadedScene;
 extern char TELEPORT_TO_LEVEL[64];
@@ -100,22 +98,17 @@ inline float minSizeRatio() { return std::min(Xratio, Yratio); }
 
 extern long	FADEDURATION;
 extern long	FADEDIR;
-extern float FrameDiff;
-extern long FirstFrame;
+extern float framedelay;
+extern bool FirstFrame;
+
 #ifdef BUILD_EDITOR
-extern long EDITMODE;
-extern long EDITION;
 extern long DEBUGNPCMOVE;
-#else
-const long EDITMODE = 0;
 #endif
-extern long SHOW_TORCH;
 extern long CURRENTLEVEL;
 extern long TELEPORT_TO_ANGLE;
-extern long DANAESIZX;
-extern long DANAESIZY;
-extern long DANAECENTERX;
-extern long DANAECENTERY;
+
+extern Rect g_size;
+
 extern unsigned long FADESTART;
 extern unsigned long AimTime;
 
@@ -137,6 +130,8 @@ struct QUAKE_FX_STRUCT {
 };
 extern QUAKE_FX_STRUCT QuakeFx;
 
+extern bool g_debugToggles[10];
+
 void SetEditMode(long ed, const bool stop_sound = true);
 void AddQuakeFX(float intensity, float duration, float period, long flags);
 
@@ -147,23 +142,20 @@ void ARX_SetAntiAliasing();
 void ReMappDanaeButton();
 void AdjustMousePosition();
 void DANAE_StartNewQuest();
-bool DANAE_ManageSplashThings();
-long DANAE_Manage_Cinematic();
+bool HandleGameFlowTransitions();
+void DANAE_Manage_Cinematic();
 void DanaeRestoreFullScreen();
 void FirstFrameHandling();
 
 void ShowTestText();
 void ShowInfoText();
 void ShowFPS();
+void ShowDebugToggles();
 
 void DrawImproveVisionInterface();
-void DrawMagicSightInterface();
-void RenderAllNodes();
-
-void CheckMr();
 
 void ManageFade();
-void ManageQuakeFX();
+void ManageQuakeFX(EERIE_CAMERA *cam);
 
 void ManageCombatModeAnimations();
 void ManageCombatModeAnimationsEND();

@@ -39,11 +39,19 @@ static const char vertexShaderSource[] = "void main() {\n"
 	"	gl_FogFragCoord = vertex.z;\n"
 	"}\n";
 
-OpenGLRenderer::OpenGLRenderer() : useVertexArrays(false), useVBOs(false), maxTextureStage(0), shader(0), maximumAnisotropy(1.f), initialized(false) { }
+OpenGLRenderer::OpenGLRenderer()
+	: useVertexArrays(false)
+	, useVBOs(false)
+	, maxTextureStage(0)
+	, shader(0)
+	, maximumAnisotropy(1.f)
+	{ }
 
 OpenGLRenderer::~OpenGLRenderer() {
 	
-	shutdown();
+	if(isInitialized()) {
+		shutdown();
+	}
 	
 	// TODO textures must be destructed before OpenGLRenderer or not at all
 	//for(TextureList::iterator it = textures.begin(); it != textures.end(); ++it) {
@@ -112,10 +120,11 @@ static GLuint loadVertexShader(const char * source) {
 	return shader;
 }
 
-void OpenGLRenderer::Initialize() {
+void OpenGLRenderer::initialize() {
 	
 	if(glewInit() != GLEW_OK) {
 		LogError << "GLEW init failed";
+		return;
 	}
 	
 	CrashHandler::setVariable("GLEW version", glewGetString(GLEW_VERSION));
@@ -129,12 +138,43 @@ void OpenGLRenderer::Initialize() {
 	LogInfo << " └─ Device: " << glGetString(GL_RENDERER);
 	CrashHandler::setVariable("OpenGL device", glGetString(GL_RENDERER));
 	
-	reinit();
+}
+
+void OpenGLRenderer::beforeResize(bool wasOrIsFullscreen) {
+	
+#if ARX_PLATFORM == ARX_PLATFORM_LINUX || ARX_PLATFORM == ARX_PLATFORM_BSD
+	// No re-initialization needed
+	ARX_UNUSED(wasOrIsFullscreen);
+#else
+	
+	if(!isInitialized()) {
+		return;
+	}
+	
+	#if ARX_PLATFORM == ARX_PLATFORM_WIN32
+	if(!wasOrIsFullscreen) {
+		return;
+	}
+	#else
+	// By default, always reinit to avoid issues on untested platforms
+	ARX_UNUSED(wasOrIsFullscreen);
+	#endif
+	
+	shutdown();
+	
+#endif
+	
+}
+
+void OpenGLRenderer::afterResize() {
+	if(!isInitialized()) {
+		reinit();
+	}
 }
 
 void OpenGLRenderer::reinit() {
 	
-	arx_assert(!initialized);
+	arx_assert(!isInitialized());
 	
 	if(!GLEW_ARB_vertex_array_bgra) {
 		LogWarning << "Missing OpenGL extension ARB_vertex_array_bgra, not using vertex arrays!";
@@ -171,7 +211,7 @@ void OpenGLRenderer::reinit() {
 	Clear(ColorBuffer | DepthBuffer);
 	
 	currentTransform = GL_UnsetTransform;
-	glArrayClientState = GL_NoArray;
+	switchVertexArray(GL_NoArray, 0, 0);
 	
 	CHECK_GL;
 	
@@ -194,12 +234,15 @@ void OpenGLRenderer::reinit() {
 		CHECK_GL;
 	}
 	
-	initialized = true;
+	onRendererInit();
+	
 }
 
 void OpenGLRenderer::shutdown() {
 	
-	arx_assert(initialized);
+	arx_assert(isInitialized());
+	
+	onRendererShutdown();
 	
 	if(shader) {
 		glDeleteObjectARB(shader);
@@ -213,7 +256,6 @@ void OpenGLRenderer::shutdown() {
 	
 	maximumAnisotropy = 1.f;
 	
-	initialized = false;
 }
 
 void OpenGLRenderer::BeginScene() {
@@ -433,7 +475,7 @@ void OpenGLRenderer::SetViewport(const Rect & _viewport) {
 	
 	// TODO maybe it's better to always have the viewport cover the whole window and use glScissor instead?
 	
-	int height = mainApp->GetWindow()->getSize().y;
+	int height = mainApp->getWindow()->getSize().y;
 	
 	glViewport(viewport.left, height - viewport.bottom, viewport.width(), viewport.height());
 	
@@ -480,7 +522,7 @@ void OpenGLRenderer::Clear(BufferFlags bufferFlags, Color clearColor, float clea
 		
 		glEnable(GL_SCISSOR_TEST);
 		
-		int height = mainApp->GetWindow()->getSize().y;
+		int height = mainApp->getWindow()->getSize().y;
 		
 		for(size_t i = 0; i < nrects; i++) {
 			glScissor(rect[i].left, height - rect[i].bottom, rect[i].width(), rect[i].height());
@@ -568,35 +610,6 @@ void OpenGLRenderer::SetFillMode(FillMode mode) {
 	CHECK_GL;
 }
 
-void OpenGLRenderer::DrawTexturedRect(float x, float y, float w, float h, float uStart, float vStart, float uEnd, float vEnd, Color color) {
-	
-	applyTextureStages();
-	disableTransform();
-	
-	x -= .5f;
-	y -= .5f;
-	
-	glColor3ub(color.r, color.g, color.b);
-	
-	glBegin(GL_QUADS);
-		
-		glMultiTexCoord2f(GL_TEXTURE0, uStart, vStart);
-		glVertex3f(x, y, 0);
-		
-		glMultiTexCoord2f(GL_TEXTURE0, uEnd, vStart);
-		glVertex3f(x + w, y, 0);
-		
-		glMultiTexCoord2f(GL_TEXTURE0, uEnd, vEnd);
-		glVertex3f(x + w, y + h, 0);
-		
-		glMultiTexCoord2f(GL_TEXTURE0, uStart, vEnd);
-		glVertex3f(x, y + h, 0);
-		
-	glEnd();
-	
-	CHECK_GL;
-}
-
 VertexBuffer<TexturedVertex> * OpenGLRenderer::createVertexBufferTL(size_t capacity, BufferUsage usage) {
 	if(useVBOs && shader) {
 		return new GLVertexBuffer<TexturedVertex>(this, capacity, usage); 
@@ -635,7 +648,7 @@ void OpenGLRenderer::drawIndexed(Primitive primitive, const TexturedVertex * ver
 	
 	if(useVertexArrays && shader) {
 		
-		glBindBuffer(GL_ARRAY_BUFFER, GL_NONE);
+		bindBuffer(GL_NONE);
 		
 		setVertexArray(vertices, vertices);
 		
@@ -658,7 +671,7 @@ void OpenGLRenderer::drawIndexed(Primitive primitive, const TexturedVertex * ver
 
 bool OpenGLRenderer::getSnapshot(Image & image) {
 	
-	Vec2i size = mainApp->GetWindow()->getSize();
+	Vec2i size = mainApp->getWindow()->getSize();
 	
 	image.Create(size.x, size.y, Image::Format_R8G8B8);
 	
@@ -677,7 +690,7 @@ bool OpenGLRenderer::getSnapshot(Image & image, size_t width, size_t height) {
 
 	// duplication to ensure use of Image::Format_R8G8B8
 	Image fullsize;
-	Vec2i size = mainApp->GetWindow()->getSize();
+	Vec2i size = mainApp->getWindow()->getSize();
 	fullsize.Create(size.x, size.y, Image::Format_R8G8B8);
 	glReadPixels(0, 0, size.x, size.y, GL_RGB, GL_UNSIGNED_BYTE, fullsize.GetData()); 
 

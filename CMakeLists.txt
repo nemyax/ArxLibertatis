@@ -38,14 +38,12 @@ option(INSTALL_SCRIPTS "Install the data install script" ON)
 
 # Optional dependencies
 option(USE_OPENAL "Build the OpenAL audio backend" ON)
-option(USE_DSOUND "Build the DirectSound audio backend" ON)
 option(USE_OPENGL "Build the OpenGL renderer backend" ON)
-option(USE_D3D9 "Build the Direct3D 9 renderer backend" ON)
-option(USE_SDL "Build the SDL windowing backend" ON)
-option(USE_DINPUT8 "Build the DirectInput 8 input backend" ON)
 option(USE_NATIVE_FS "Use the native filesystem backend directly instead of boost" ON)
-option(USE_QT5 "Use Qt 5 if available" ON)
-option(USE_QT4 "Use Qt 4 if available" ON)
+
+# Alternative dependencies
+set(WITH_SDL CACHE STRING "The SDL version to use: 1 or 2 or empty (use any)")
+set(WITH_QT CACHE STRING "The Qt version to use: 4 or 5 or empty (use any)")
 
 # Build types
 option(UNITY_BUILD "Unity build" OFF)
@@ -114,11 +112,14 @@ set(GAMESBINDIR "${CMAKE_INSTALL_BINDIR}" CACHE
     STRING "Install location for game executables (relative to prefix).")
 set(SCRIPTDIR "${CMAKE_INSTALL_BINDIR}" CACHE
     STRING "Where to install the data install script (relative to prefix).")
+set(INSTALL_DATADIR "${CMAKE_INSTALL_DATAROOTDIR}/games/arx" CACHE
+    STRING "Install location for Arx Libertatis data files (relative to prefix).")
 mark_as_advanced(
 	ICONDIR
 	APPDIR
 	GAMESBINDIR
 	SCRIPTDIR
+	INSTALL_DATADIR
 )
 
 # Default runtime user and data directories
@@ -225,19 +226,6 @@ if(WIN32)
 	add_definitions(-DNOMINMAX)
 	add_definitions(-DWIN32_LEAN_AND_MEAN)
 	list(APPEND ARX_LIBRARIES gdi32 shell32 comdlg32 ole32 comctl32)
-	set(ARX_HAVE_WINAPI 1)
-else()
-	set(ARX_HAVE_WINAPI 0)
-endif()
-
-# Direct X
-if(NOT ARX_HAVE_WINAPI)
-	# DirectX builds on the Win32 api
-	set(USE_D3D9 OFF)
-	set(USE_DSOUND OFF)
-	set(USE_DINPUT8 OFF)
-elseif(USE_D3D9 OR USE_DINPUT8)
-	find_package(DirectX REQUIRED)
 endif()
 
 # pthread / Win32 threads
@@ -286,7 +274,23 @@ if(USE_OPENAL)
 endif()
 
 # SDL
-if(USE_SDL)
+if(NOT ARX_HAVE_SDL AND (NOT WITH_SDL OR WITH_SDL EQUAL 2))
+	if(NOT WITH_SDL)
+		set(SDL_OPTIONAL_DEPENDENCY)
+	else()
+		set(SDL_OPTIONAL_DEPENDENCY ${OPTIONAL_DEPENDENCY})
+	endif()
+	set(SDL2_BUILDING_LIBRARY 1) # we don't need SDL2main!
+	find_package(SDL2 ${OPTIONAL_DEPENDENCY})
+	if(SDL2_FOUND)
+		if(NOT MSVC)
+			check_link_library(SDL2 SDL2_LIBRARIES)
+		endif()
+		set(ARX_HAVE_SDL2 1)
+		set(ARX_HAVE_SDL 1)
+	endif()
+endif()
+if(NOT ARX_HAVE_SDL AND (NOT WITH_SDL OR WITH_SDL EQUAL 1))
 	if(NOT MACOSX)
 		# Required to avoid linking with SDLmain except for OS X where it is necessary
 		# due to the need to have NSApplication correctly setup by SDLmain.
@@ -297,6 +301,8 @@ if(USE_SDL)
 		if(NOT MSVC)
 			check_link_library(SDL SDL_LIBRARY)
 		endif()
+		set(ARX_HAVE_SDL1 1)
+		set(ARX_HAVE_SDL 1)
 	endif(SDL_FOUND)
 endif()
 
@@ -304,13 +310,18 @@ endif()
 find_package(Boost 1.39 REQUIRED)
 include_directories(SYSTEM ${Boost_INCLUDE_DIRS})
 
+# glm
+find_package(GLM REQUIRED)
+include_directories(SYSTEM ${GLM_INCLUDE_DIRS})
+add_definitions(-DGLM_FORCE_RADIANS)
+
 # Qt and DbgHelp
 set(ARX_HAVE_CRASHREPORTER 0)
 if(BUILD_CRASHREPORTER)
 	
 	# Try to find Qt 5 modules
-	if(NOT HAVE_QT AND USE_QT5)
-		if(USE_QT4)
+	if(NOT HAVE_QT AND (NOT WITH_QT OR WITH_QT EQUAL 5))
+		if(NOT WITH_QT)
 			# Missing Qt5*Config.cmake files are not errors, reuduce log spam
 			set(Qt_OPTIONAL_DEPENDENCY QUIET)
 		else()
@@ -321,14 +332,17 @@ if(BUILD_CRASHREPORTER)
 		find_package(Qt5Widgets ${Qt_OPTIONAL_DEPENDENCY})
 		find_package(Qt5Network ${Qt_OPTIONAL_DEPENDENCY})
 		if(Qt5Core_FOUND AND Qt5Gui_FOUND AND Qt5Widgets_FOUND AND Qt5Network_FOUND)
-			message(STATUS "Using Qt 5")
+			if(NOT ARX_FOUND_QT_VERSION EQUAL 5)
+				message(STATUS "Using Qt 5")
+				set(ARX_FOUND_QT_VERSION 5 CACHE INTERNAL "foobar")
+			endif()
 			set(HAVE_QT5 1)
 			set(HAVE_QT 1)
 		endif()
 	endif()
 	
 	# Otherwise, look for Qt 4
-	if(NOT HAVE_QT AND USE_QT4)
+	if(NOT HAVE_QT AND (NOT WITH_QT OR WITH_QT EQUAL 4))
 		find_package(Qt4 COMPONENTS QtCore QtGui QtNetwork ${OPTIONAL_DEPENDENCY})
 		if(QT_FOUND)
 			if(NOT MSVC)
@@ -336,7 +350,10 @@ if(BUILD_CRASHREPORTER)
 				check_link_library(QtGui QT_QTGUI_LIBRARY_RELEASE QT_QTGUI)
 				check_link_library(QtNetwork QT_QTNETWORK_LIBRARY_RELEASE QT_QTNETWORK)
 			endif()
-			message(STATUS "Using Qt 4")
+			if(NOT ARX_FOUND_QT_VERSION EQUAL 4)
+				message(STATUS "Using Qt 4")
+				set(ARX_FOUND_QT_VERSION 4 CACHE INTERNAL "foobar")
+			endif()
 			set(HAVE_QT4 1)
 			set(HAVE_QT 1)
 		endif()
@@ -444,21 +461,29 @@ if(NOT MSVC)
 	if(LIBRT_LIBRARY)
 		unset(CMAKE_REQUIRED_LIBRARIES)
 	endif()
-	if(NOT ARX_HAVE_CLOCK_GETTIME AND NOT ARX_HAVE_WINAPI)
+	if(NOT ARX_HAVE_CLOCK_GETTIME AND NOT WIN32)
 		check_include_files("mach/clock.h;mach/clock_types.h;mach/mach_host.h"
 		                    ARX_HAVE_MACH_CLOCK)
 	endif()
 	
-	check_include_file("wordexp.h" ARX_HAVE_WORDEXP_H)
+	check_symbol_exists(wordexp "wordexp.h" ARX_HAVE_WORDEXP)
+	
+	check_symbol_exists(open "fcntl.h" ARX_HAVE_OPEN)
 	
 	check_symbol_exists(fork "unistd.h" ARX_HAVE_FORK)
 	check_symbol_exists(readlink "unistd.h" ARX_HAVE_READLINK)
 	check_symbol_exists(dup2 "unistd.h" ARX_HAVE_DUP2)
-	check_symbol_exists(execl "unistd.h" ARX_HAVE_EXECL)
-	check_symbol_exists(execlp "unistd.h" ARX_HAVE_EXECLP)
+	check_symbol_exists(pipe "unistd.h" ARX_HAVE_PIPE)
+	check_symbol_exists(read "unistd.h" ARX_HAVE_READ)
+	check_symbol_exists(close "unistd.h" ARX_HAVE_CLOSE)
+	check_symbol_exists(setpgid "unistd.h" ARX_HAVE_SETPGID)
+	check_symbol_exists(execvp "unistd.h" ARX_HAVE_EXECVP)
+	check_symbol_exists(posix_spawnp "spawn.h" ARX_HAVE_POSIX_SPAWNP)
 	if(NOT WIN32)
 		check_symbol_exists(isatty "unistd.h" ARX_HAVE_ISATTY)
 	endif()
+	
+	check_symbol_exists(waitpid "sys/wait.h" ARX_HAVE_WAITPID)
 	
 	check_symbol_exists(sched_getscheduler "sched.h" ARX_HAVE_SCHED_GETSCHEDULER)
 	
@@ -551,11 +576,6 @@ set(AUDIO_OPENAL_SOURCES
 	src/audio/openal/OpenALUtils.cpp
 )
 
-set(AUDIO_DSOUND_SOURCES
-	src/audio/dsound/DSoundBackend.cpp
-	src/audio/dsound/DSoundSource.cpp
-)
-
 set(CORE_SOURCES
 	src/core/Application.cpp
 	src/core/ArxGame.cpp
@@ -583,10 +603,14 @@ set(GAME_SOURCES
 	src/game/NPC.cpp
 	src/game/Player.cpp
 	src/game/Spells.cpp
+	src/game/spell/FlyingEye.cpp
+	src/game/spell/Cheat.cpp
 )
 
 set(GRAPHICS_SOURCES
 	src/graphics/Draw.cpp
+	src/graphics/DrawLine.cpp
+	src/graphics/DrawDebug.cpp
 	src/graphics/GraphicsModes.cpp
 	src/graphics/GraphicsUtility.cpp
 	src/graphics/Math.cpp
@@ -595,12 +619,15 @@ set(GRAPHICS_SOURCES
 	src/graphics/data/FTL.cpp
 	src/graphics/data/Mesh.cpp
 	src/graphics/data/MeshManipulation.cpp
+	src/graphics/data/BackgroundEdit.cpp
 	src/graphics/data/Progressive.cpp
 	src/graphics/data/TextureContainer.cpp
 	src/graphics/effects/CinematicEffects.cpp
 	src/graphics/effects/DrawEffects.cpp
 	src/graphics/effects/Fog.cpp
 	src/graphics/effects/SpellEffects.cpp
+	src/graphics/effects/Halo.cpp
+	src/graphics/effects/Trail.cpp
 	src/graphics/font/Font.cpp
 	src/graphics/font/FontCache.cpp
 	src/graphics/image/Image.cpp
@@ -610,6 +637,7 @@ set(GRAPHICS_SOURCES
 	src/graphics/particle/ParticleEffects.cpp
 	src/graphics/particle/ParticleManager.cpp
 	src/graphics/particle/ParticleSystem.cpp
+	src/graphics/particle/MagicFlare.cpp
 	src/graphics/spells/Spells01.cpp
 	src/graphics/spells/Spells02.cpp
 	src/graphics/spells/Spells03.cpp
@@ -624,14 +652,10 @@ set(GRAPHICS_SOURCES
 	src/graphics/texture/TextureStage.cpp
 )
 
-set(GRAPHICS_D3D9_SOURCES
-	src/graphics/d3d9/D3D9Renderer.cpp
-	src/graphics/d3d9/D3D9Texture2D.cpp
-	src/graphics/d3d9/D3D9TextureStage.cpp
-)
 set(GRAPHICS_OPENGL_SOURCES
 	src/graphics/opengl/GLTexture2D.cpp
 	src/graphics/opengl/GLTextureStage.cpp
+	src/graphics/opengl/GLVertexBuffer.cpp
 	src/graphics/opengl/OpenGLRenderer.cpp
 )
 
@@ -649,8 +673,8 @@ set(GUI_SOURCES
 )
 
 set(INPUT_SOURCES src/input/Input.cpp)
-set(INPUT_DINPUT8_SOURCES src/input/DInput8Backend.cpp)
-set(INPUT_SDL_SOURCES src/input/SDLInputBackend.cpp)
+set(INPUT_SDL1_SOURCES src/input/SDL1InputBackend.cpp)
+set(INPUT_SDL2_SOURCES src/input/SDL2InputBackend.cpp)
 
 set(IO_SOURCES
 	src/io/CinematicLoad.cpp
@@ -711,6 +735,7 @@ set(PLATFORM_SOURCES
 	src/platform/Lock.cpp
 	src/platform/OS.cpp
 	src/platform/Platform.cpp
+	src/platform/Process.cpp
 	src/platform/ProgramOptions.cpp
 	src/platform/Time.cpp
 )
@@ -768,9 +793,8 @@ set(WINDOW_SOURCES
 	src/window/RenderWindow.cpp
 	src/window/Window.cpp
 )
-set(WINDOW_SDL_SOURCES src/window/SDLWindow.cpp)
-set(WINDOW_WIN32_SOURCES src/window/Win32Window.cpp)
-set(WINDOW_D3D9_SOURCES src/window/D3D9Window.cpp)
+set(WINDOW_SDL1_SOURCES src/window/SDL1Window.cpp)
+set(WINDOW_SDL2_SOURCES src/window/SDL2Window.cpp)
 
 # TODO manually specify theese like we do for the tools
 file(GLOB_RECURSE ALL_INCLUDES RELATIVE ${CMAKE_SOURCE_DIR} ${SRC_DIR}/*.h)
@@ -791,48 +815,42 @@ if(USE_OPENAL AND OPENAL_FOUND)
 		set(ARX_HAVE_OPENAL_EFX 1)
 	endif()
 endif()
-if(USE_DSOUND)
-	# TODO does this need DIRECTX_FOUND?if so, the find_package(DirectX) should
-	# also be run if USE_DSOUND is set but USE_D3D9 isn't
-	list(APPEND AUDIO_SOURCES ${AUDIO_DSOUND_SOURCES})
-	set(ARX_HAVE_DSOUND 1)
-endif()
 
 # Graphics
-if(USE_D3D9 AND DIRECTX_FOUND)
-	list(APPEND GRAPHICS_SOURCES ${GRAPHICS_D3D9_SOURCES})
-	list(APPEND WINDOW_SOURCES ${WINDOW_WIN32_SOURCES} ${WINDOW_D3D9_SOURCES})
-	list(APPEND ARX_LIBRARIES ${DIRECTX_D3D9_LIBRARY} ${DIRECTX_D3DX9_LIBRARY} ${DIRECTX_D3DCOMPILER_LIBRARY} ${DIRECTX_DXERR9_LIBRARY})
-	include_directories(SYSTEM ${DIRECTX_INCLUDE_DIR})
-	set(ARX_HAVE_D3D9 1)
-endif()
 if(USE_OPENGL AND OPENGL_FOUND AND GLEW_FOUND)
 	list(APPEND GRAPHICS_SOURCES ${GRAPHICS_OPENGL_SOURCES})
 	list(APPEND ARX_LIBRARIES ${GLEW_LIBRARIES} ${OPENGL_gl_LIBRARY})
 	include_directories(SYSTEM ${OPENGL_INCLUDE_DIR} ${GLEW_INCLUDE_DIR})
 	add_definitions(${GLEW_DEFINITIONS})
 	set(ARX_HAVE_OPENGL 1)
+else()
+	# SDL backends require OpenGL
+	unset(ARX_HAVE_SDL)
+	unset(ARX_HAVE_SDL1)
+	unset(ARX_HAVE_SDL2)
 endif()
 
 # Windowing / input
-if(USE_SDL AND ARX_HAVE_OPENGL AND SDL_FOUND)
-	list(APPEND WINDOW_SOURCES ${WINDOW_SDL_SOURCES})
-	list(APPEND INPUT_SOURCES ${INPUT_SDL_SOURCES})
-	list(APPEND ARX_LIBRARIES ${SDL_LIBRARY})
-	include_directories(SYSTEM ${SDL_INCLUDE_DIR})
-	set(ARX_HAVE_SDL 1)
-endif()
-if(USE_DINPUT8 AND DIRECTX_FOUND)
-	list(APPEND INPUT_SOURCES ${INPUT_DINPUT8_SOURCES})
-	list(APPEND ARX_LIBRARIES ${DIRECTX_DINPUT8_LIBRARY} ${DIRECTX_DXGUID_LIBRARY} ${DIRECTX_DXERR9_LIBRARY})
-	set(ARX_HAVE_DINPUT8 1)
+if(ARX_HAVE_SDL)
+	if(ARX_HAVE_SDL2)
+		list(APPEND WINDOW_SOURCES ${WINDOW_SDL2_SOURCES})
+		list(APPEND INPUT_SOURCES ${INPUT_SDL2_SOURCES})
+		list(APPEND ARX_LIBRARIES ${SDL2_LIBRARIES})
+		include_directories(SYSTEM ${SDL2_INCLUDE_DIR})
+	elseif(ARX_HAVE_SDL1)
+		list(APPEND WINDOW_SOURCES ${WINDOW_SDL1_SOURCES})
+		list(APPEND INPUT_SOURCES ${INPUT_SDL1_SOURCES})
+		list(APPEND ARX_LIBRARIES ${SDL_LIBRARY})
+		include_directories(SYSTEM ${SDL_INCLUDE_DIR})
+	endif()
+	add_definitions(-DNO_SDL_GLEXT) # we use GLEW for that
 endif()
 
 # Logging
 if(ARX_HAVE_ISATTY)
 	list(APPEND IO_LOGGER_SOURCES ${IO_LOGGER_POSIX_SOURCES})
 endif()
-if(ARX_HAVE_WINAPI)
+if(WIN32)
 	list(APPEND IO_LOGGER_SOURCES ${IO_LOGGER_WINDOWS_SOURCES})
 endif()
 list(APPEND IO_SOURCES ${IO_LOGGER_SOURCES} ${IO_LOGGER_EXTRA_SOURCES})
@@ -842,7 +860,7 @@ list(APPEND IO_SOURCES ${IO_RESOURCE_SOURCES})
 # Filesystem
 if(ARX_HAVE_POSIX_FILESYSTEM)
 	list(APPEND IO_FILESYSTEM_SOURCES ${IO_FILESYSTEM_POSIX_SOURCES})
-elseif(USE_NATIVE_FS AND ARX_HAVE_WINAPI)
+elseif(USE_NATIVE_FS AND WIN32)
 	add_definitions(-DARX_HAVE_WINDOWS_FILESYSTEM)
 	list(APPEND IO_FILESYSTEM_SOURCES ${IO_FILESYSTEM_WINDOWS_SOURCES})
 	set(ARX_HAVE_WIN32_FILESYSTEM 1)
@@ -880,7 +898,7 @@ list(APPEND IO_SOURCES ${IO_FILESYSTEM_SOURCES})
 
 # Crash reporter
 if(ARX_HAVE_CRASHREPORTER)
-	if((ARX_HAVE_EXECLP OR ARX_HAVE_EXECL) AND ARX_HAVE_FORK AND ARX_HAVE_KILL)
+	if(ARX_HAVE_EXECVP AND ARX_HAVE_FORK AND ARX_HAVE_KILL)
 		list(APPEND PLATFORM_CRASHHANDLER_SOURCES ${PLATFORM_CRASHHANDLER_IMPL_SOURCES})
 		list(APPEND PLATFORM_CRASHHANDLER_SOURCES ${PLATFORM_CRASHHANDLER_POSIX_SOURCES})
 		set(ARX_HAVE_CRASHHANDLER_POSIX 1)
@@ -951,7 +969,7 @@ configure_file("${SRC_DIR}/${PLATFORM_CONFIG_H}.in" "${PLATFORM_CONFIG_H}" ESCAP
 
 set(VERSION_TEMPLATE "${SRC_DIR}/core/Version.cpp.in")
 set(VERSION_FILE     "${CMAKE_BINARY_DIR}/core/Version.cpp")
-set(VERSION_SOURCES  VERSION "VERSION" AUTHORS "AUTHORS")
+set(VERSION_SOURCES  VERSION "VERSION" AUTHORS "AUTHORS" COPYING "COPYING")
 file(MAKE_DIRECTORY "${CMAKE_BINARY_DIR}/core")
 version_file("${VERSION_TEMPLATE}" "${VERSION_FILE}" "${VERSION_SOURCES}" ".git")
 list(APPEND ARX_SOURCES "${VERSION_FILE}")
@@ -1017,7 +1035,7 @@ if(ARX_HAVE_CRASHREPORTER)
 		"${VERSION_FILE}"
 	)
 	
-	if(ARX_HAVE_WINAPI)
+	if(WIN32)
 		list(APPEND arxcrashreporter_SOURCES
 			tools/crashreporter/Win32Utilities.h
 			tools/crashreporter/Win32Utilities.cpp
@@ -1255,6 +1273,29 @@ if(BUILD_TESTS)
 endif()
 
 
+# Install Arx Libertatis data files
+# TODO these should be zipped up once we support that
+install(DIRECTORY data/core/ DESTINATION "${INSTALL_DATADIR}")
+# Also copy / symlink the data file into the build directory to run dev builds of arx
+get_property(arx_location TARGET arx PROPERTY LOCATION)
+get_filename_component(arx_location "${arx_location}" PATH)
+set(arx_core_dir "${CMAKE_SOURCE_DIR}/data/core")
+file(GLOB arx_data_dirs RELATIVE "${arx_core_dir}" "${arx_core_dir}/*")
+add_custom_target(copy_data_dirs ALL)
+if(UNIX)
+	set(symlink_command "create_symlink")
+else()
+	set(symlink_command "copy_directory")
+endif()
+foreach(dir IN LISTS arx_data_dirs)
+	add_custom_command(TARGET copy_data_dirs PRE_BUILD
+		COMMAND "${remove_directory}" -E remove_directory "${arx_location}/${dir}"
+		COMMAND "${CMAKE_COMMAND}" -E
+			"${symlink_command}" "${arx_core_dir}/${dir}" "${arx_location}/${dir}"
+		VERBATIM
+	)
+endforeach()
+
 # Install the data install script
 if(INSTALL_SCRIPTS AND NOT WIN32)
 	install(PROGRAMS scripts/arx-install-data DESTINATION "${SCRIPTDIR}")
@@ -1287,6 +1328,10 @@ if(BUILD_TOOLS)
 	install(FILES data/man/arxunpak.1 DESTINATION "${CMAKE_INSTALL_MANDIR}/man1"
 	        OPTIONAL)
 endif()
+if(INSTALL_SCRIPTS AND NOT WIN32)
+	install(FILES data/man/arx-install-data.1 DESTINATION "${CMAKE_INSTALL_MANDIR}/man1"
+	        OPTIONAL)
+endif()
 
 
 # Print a configuration summary
@@ -1294,10 +1339,14 @@ endif()
 message("")
 message("Configuration:")
 if(NOT MSVC)
+	set(BUILD_TYPE_SUFFIX "")
 	if(UNITY_BUILD)
-		set(BUILD_TYPE_SUFFIX " (unity build)")
-	else()
-		set(BUILD_TYPE_SUFFIX "")
+		set(BUILD_TYPE_SUFFIX "${BUILD_TYPE_SUFFIX} (unity build)")
+	endif()
+	if(DEBUG AND NOT "${CMAKE_BUILD_TYPE}" STREQUAL "Debug")
+		set(BUILD_TYPE_SUFFIX "${BUILD_TYPE_SUFFIX} with debug output")
+	elseif(NOT DEBUG AND NOT "${CMAKE_BUILD_TYPE}" STREQUAL "Release")
+		set(BUILD_TYPE_SUFFIX "${BUILD_TYPE_SUFFIX} with debug output")
 	endif()
 	message(" - Build type: ${CMAKE_BUILD_TYPE}${BUILD_TYPE_SUFFIX}")
 endif(NOT MSVC)
@@ -1308,19 +1357,13 @@ print_configuration("Filesystem backend" FIRST
 )
 print_configuration("Renderer"
 	ARX_HAVE_OPENGL "OpenGL"
-	ARX_HAVE_D3D9   "Direct3D 9"
 )
 print_configuration("Audio backend"
 	ARX_HAVE_OPENAL "OpenAL"
-	ARX_HAVE_DSOUND "Direct Sound"
-)
-print_configuration("Input backend"
-	ARX_HAVE_SDL     "SDL"
-	ARX_HAVE_DINPUT8 "DirectInput 8"
 )
 print_configuration("Windowing"
-	ARX_HAVE_SDL     "SDL"
-	ARX_HAVE_D3D9    "Win32"
+	ARX_HAVE_SDL2     "SDL 2"
+	ARX_HAVE_SDL1     "SDL 1.2"
 )
 print_configuration("Crash handler"
 	ARX_HAVE_CRASHHANDLER_POSIX   "POSIX"
@@ -1340,24 +1383,21 @@ message("")
 
 # Detect configuration errors
 
-if(NOT (ARX_HAVE_PTHREADS OR ARX_HAVE_WINAPI))
+if(NOT (ARX_HAVE_PTHREADS OR WIN32))
 	message(SEND_ERROR "No supported thread libraries found.")
 endif()
-if(NOT (ARX_HAVE_OPENGL OR ARX_HAVE_D3D9))
-	message(SEND_ERROR "No renderer available - need either OpenGL and GLEW or Direct3D 9")
+if(NOT (ARX_HAVE_OPENGL))
+	message(SEND_ERROR "No renderer available - need OpenGL and GLEW")
 endif()
-if(NOT (ARX_HAVE_OPENAL OR ARX_HAVE_DSOUND))
-	message(WARNING "No audio backend enabled - need either OpenAL or Direct Sound")
+if(NOT (ARX_HAVE_OPENAL))
+	message(WARNING "No audio backend enabled - need OpenAL")
 endif()
-if(NOT (ARX_HAVE_SDL OR ARX_HAVE_DINPUT8))
-	message(SEND_ERROR "No input backend available - need either SDL or DirectInput 8")
+if(NOT (ARX_HAVE_SDL))
+	message(SEND_ERROR "No windowing backend available - need SDL 2 or 1.2")
 endif()
-if(NOT (ARX_HAVE_SDL OR ARX_HAVE_WINAPI))
-	message(SEND_ERROR "No windowing backend available - need either SDL or Windows")
-endif()
-if(NOT (ARX_HAVE_NANOSLEEP OR ARX_HAVE_WINAPI))
+if(NOT (ARX_HAVE_NANOSLEEP OR WIN32))
 	message(SEND_ERROR "Need either nanosleep or WIN32.")
 endif()
-if(NOT (ARX_HAVE_CLOCK_GETTIME OR ARX_HAVE_WINAPI OR ARX_HAVE_MACH_CLOCK))
+if(NOT (ARX_HAVE_CLOCK_GETTIME OR WIN32 OR ARX_HAVE_MACH_CLOCK))
 	message(SEND_ERROR "Need either clock_gettime or WIN32 or mach clock_get_time.")
 endif()

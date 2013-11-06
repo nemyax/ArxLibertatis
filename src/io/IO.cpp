@@ -47,6 +47,7 @@ ZeniMax Media Inc., Suite 120, Rockville, Maryland 20850 USA.
 #include "io/IO.h"
 
 #include <cstring>
+#include <algorithm>
 
 #include "io/fs/FilePath.h"
 #include "io/fs/Filesystem.h"
@@ -54,7 +55,7 @@ ZeniMax Media Inc., Suite 120, Rockville, Maryland 20850 USA.
 
 using std::string;
 
-#ifdef BUILD_EDIT_LOADSAVE
+#if BUILD_EDIT_LOADSAVE
 
 void HERMES_CreateFileCheck(const fs::path & name, char * scheck, size_t size, float id) {
 	

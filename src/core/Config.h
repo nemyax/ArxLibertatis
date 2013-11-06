@@ -26,8 +26,8 @@
 
 #include "io/fs/FilePath.h"
 
-#include "math/MathFwd.h"
-#include "math/Vector2.h"
+#include "math/Types.h"
+#include "math/Vector.h"
 
 //! Enum for all the controlling actions
 enum ControlAction {
@@ -42,7 +42,7 @@ enum ControlAction {
 	CONTROLS_CUST_LEANLEFT,
 	CONTROLS_CUST_LEANRIGHT,
 	CONTROLS_CUST_CROUCH,
-	CONTROLS_CUST_MOUSELOOK,
+	CONTROLS_CUST_USE,
 	CONTROLS_CUST_ACTION,
 	CONTROLS_CUST_INVENTORY,
 	CONTROLS_CUST_BOOK,
@@ -109,7 +109,6 @@ public:
 	struct {
 		
 		Vec2i resolution;
-		int bpp;
 		
 		bool fullscreen;
 		int levelOfDetail;
@@ -117,6 +116,7 @@ public:
 		bool showCrosshair;
 		bool antialiasing;
 		bool vsync;
+		
 	} video;
 	
 	// section 'window'
@@ -151,8 +151,6 @@ public:
 		bool autoDescription;
 		int mouseSensitivity;
 		bool linkMouseLookToUse;
-		
-		std::string backend;
 		
 	} input;
 	

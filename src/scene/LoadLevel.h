@@ -48,7 +48,7 @@ ZeniMax Media Inc., Suite 120, Rockville, Maryland 20850 USA.
 #define ARX_SCENE_LOADLEVEL_H
 
 #include "game/EntityId.h"
-#include "math/MathFwd.h"
+#include "math/Types.h"
 
 #include "Configure.h"
 
@@ -57,7 +57,7 @@ namespace res { class path; }
 
 extern Vec3f loddpos;
 
-#ifdef BUILD_EDIT_LOADSAVE
+#if BUILD_EDIT_LOADSAVE
 namespace fs { class path; }
 long DanaeSaveLevel(const fs::path & file);
 void LogDirCreation(const fs::path & dir);

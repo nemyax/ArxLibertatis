@@ -49,7 +49,7 @@ ZeniMax Media Inc., Suite 120, Rockville, Maryland 20850 USA.
 #include <map>
 
 #include "game/Spells.h"
-#include "math/MathFwd.h"
+#include "math/Types.h"
 
 #include "Configure.h"
 
@@ -160,20 +160,6 @@ enum ARX_INTERFACE_BOOK_ITEM
 
 };
 
-#ifdef BUILD_EDITOR
-// long "EDITION" values (Danae.cpp)
-enum ARX_INTERFACE_EDITION_MODE
-{
-	EDITION_IO,
-	EDITION_LIGHTS,
-	EDITION_FOGS,
-	EDITION_NODES,
-	EDITION_ZONES,
-	EDITION_PATHWAYS,
-	EDITION_PARTICLES
-};
-#endif
-
 enum ARX_INTERFACE_FLAG
 {
 	INTER_MAP        = 0x00000001,
@@ -262,6 +248,8 @@ void ResetPlayerInterface();
 void Set_DragInter(Entity * io);
 void CreateInterfaceTextureContainers();
 void KillInterfaceTextureContainers();
+
+void UpdateInterface();
 
 namespace gui {
 void updateQuestBook();

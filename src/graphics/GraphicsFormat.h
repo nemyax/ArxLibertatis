@@ -51,7 +51,7 @@ struct SavedVec3 {
 	f32 y;
 	f32 z;
 	
-	inline operator Vec3f() const {
+	inline Vec3f toVec3() const {
 		Vec3f a;
 		a.x = x, a.y = y, a.z = z;
 		return a;
@@ -71,13 +71,11 @@ struct SavedAnglef {
 	f32 g;
 	
 	inline operator Anglef() const {
-		Anglef r;
-		r.a = a, r.b = b, r.g  =g;
-		return r;
+		return Anglef(a, b, g);
 	}
 	
 	inline SavedAnglef & operator=(const Anglef & o) {
-		a = o.a, b = o.b, g = o.g;
+		a = o.getYaw(), b = o.getPitch(), g = o.getRoll();
 		return *this;
 	}
 	

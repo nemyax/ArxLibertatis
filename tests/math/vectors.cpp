@@ -28,14 +28,8 @@ public:
    
     EERIEMATRIX a, b;
     
-    MatrixReset(&a);
-	MatrixReset(&b);
+	//MatrixReset(&a);
+	//MatrixReset(&b);
 	CPPUNIT_ASSERT( a._11 == b._11 );
   }
 };
-
-
-int main(int argc, char *argv[]) {
-  VectorTest foo("bar");
-  foo.runTest();
-}

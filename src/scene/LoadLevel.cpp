@@ -104,47 +104,7 @@ extern QUAKE_FX_STRUCT QuakeFx;
 extern bool bGToggleCombatModeWithKey;
 extern bool bGCroucheToggle;
 
-bool CanPurge(Vec3f * pos)
-{
-	long px, pz;
-	px = pos->x * ACTIVEBKG->Xmul;
-
-	if (px > ACTIVEBKG->Xsize - 3)
-	{
-		return true;
-	}
-
-	if (px < 2)
-	{
-		return true;
-	}
-
-	pz = pos->z * ACTIVEBKG->Zmul;
-
-	if (pz > ACTIVEBKG->Zsize - 3)
-	{
-		return true;
-	}
-
-	if (pz < 2)
-	{
-		return true;
-	}
-
-	EERIE_BKG_INFO * eg;
-
-	for (long j = pz - 1; j <= pz + 1; j++)
-		for (long i = px - 1; i <= px + 1; i++)
-		{
-			eg = &ACTIVEBKG->Backg[i+j*ACTIVEBKG->Xsize];
-
-			if (eg->nbpoly) return false;
-		}
-
-	return true;
-}
-
-#ifdef BUILD_EDIT_LOADSAVE
+#if BUILD_EDIT_LOADSAVE
 
 void LogDirCreation(const fs::path & dir) {
 	if(fs::is_directory(dir)) {
@@ -231,7 +191,7 @@ long DanaeSaveLevel(const fs::path & _fic) {
 	dlh.nb_inter = nb_inter;
 	dlh.nb_zones = 0;
 	
-	dlh.pos_edit = (dlh.nb_scn != 0) ? subj.pos - Mscenepos : subj.pos;
+	dlh.pos_edit = (dlh.nb_scn != 0) ? subj.orgTrans.pos - Mscenepos : subj.orgTrans.pos;
 
 	dlh.angle_edit = player.angle;
 	dlh.lighting = false; // must be false
@@ -288,24 +248,27 @@ long DanaeSaveLevel(const fs::path & _fic) {
 	}
 	
 	for(size_t i = 0; i < MAX_FOG; i++) {
-		if(fogs[i].exist) {
+		FOG_DEF *fog = &fogs[i];
+
+		if(!fog->exist)
+			continue;
+
 			DANAE_LS_FOG dlf;
 			memset(&dlf, 0, sizeof(DANAE_LS_FOG));
-			dlf.rgb = fogs[i].rgb;
-			dlf.angle = fogs[i].angle;
-			dlf.pos = fogs[i].pos - Mscenepos;
-			dlf.blend = fogs[i].blend;
-			dlf.frequency = fogs[i].frequency;
-			dlf.move = fogs[i].move;
-			dlf.rotatespeed = fogs[i].rotatespeed;
-			dlf.scale = fogs[i].scale;
-			dlf.size = fogs[i].size;
-			dlf.special = fogs[i].special;
-			dlf.speed = fogs[i].speed;
-			dlf.tolive = fogs[i].tolive;
+			dlf.rgb = fog->rgb;
+			dlf.angle = fog->angle;
+			dlf.pos = fog->pos - Mscenepos;
+			dlf.blend = fog->blend;
+			dlf.frequency = fog->frequency;
+			dlf.move = fog->move;
+			dlf.rotatespeed = fog->rotatespeed;
+			dlf.scale = fog->scale;
+			dlf.size = fog->size;
+			dlf.special = fog->special;
+			dlf.speed = fog->speed;
+			dlf.tolive = fog->tolive;
 			memcpy(dat + pos, &dlf, sizeof(DANAE_LS_FOG));
 			pos += sizeof(DANAE_LS_FOG);
-		}
 	}
 	
 	for(long i = 0; i < nodes.nbmax; i++) {
@@ -605,7 +568,7 @@ Entity * LoadInter_Ex(const res::path & classPath, EntityInstance instance,
 	ARX_INTERACTIVE_HideGore(io);
 	
 	io->lastpos = io->initpos = io->pos = pos + trans;
-	io->move = Vec3f::ZERO;
+	io->move = Vec3f_ZERO;
 	io->initangle = io->angle = angle;
 	
 	res::path tmp = io->full_name(); // Get the directory name to check for
@@ -685,7 +648,7 @@ long DanaeLoadLevel(const res::path & file, bool loadEntities) {
 		}
 	}
 	
-	loddpos = subj.pos = dlh.pos_edit;
+	loddpos = subj.orgTrans.pos = dlh.pos_edit.toVec3();
 	player.desiredangle = player.angle = subj.angle = dlh.angle_edit;
 	
 	if(strcmp(dlh.ident, "DANAE_FILE")) {
@@ -707,7 +670,7 @@ long DanaeLoadLevel(const res::path & file, bool loadEntities) {
 			LogDebug("done loading scene");
 			FASTmse = 1;
 		} else {
-#ifdef BUILD_EDIT_LOADSAVE
+#if BUILD_EDIT_LOADSAVE
 			LogDebug("fast loading scene failed");
 			ARX_SOUND_PlayCinematic("editor_humiliation", false);
 			mse = PAK_MultiSceneToEerie(scene);
@@ -727,7 +690,7 @@ long DanaeLoadLevel(const res::path & file, bool loadEntities) {
 		trans = Mscenepos;
 		player.pos = loddpos + trans;
 	}
-#ifdef BUILD_EDIT_LOADSAVE
+#if BUILD_EDIT_LOADSAVE
 	else if(mse != NULL) {
 		Mscenepos.x = -mse->cub.xmin - (mse->cub.xmax - mse->cub.xmin) * ( 1.0f / 2 ) + ((float)ACTIVEBKG->Xsize * (float)ACTIVEBKG->Xdiv) * ( 1.0f / 2 );
 		Mscenepos.z = -mse->cub.zmin - (mse->cub.zmax - mse->cub.zmin) * ( 1.0f / 2 ) + ((float)ACTIVEBKG->Zsize * (float)ACTIVEBKG->Zdiv) * ( 1.0f / 2 );
@@ -740,18 +703,16 @@ long DanaeLoadLevel(const res::path & file, bool loadEntities) {
 		mse->pos.x = Mscenepos.x = Mscenepos.x + BKG_SIZX - t1;
 		mse->pos.z = Mscenepos.z = Mscenepos.z + BKG_SIZZ - t2;
 		mse->pos.y = Mscenepos.y = -mse->cub.ymin - 100.f - mse->point0.y;
-		lastteleport = player.pos = subj.pos = moveto = mse->pos + mse->point0;
-		mapcam.pos.x = player.pos.x;
-		mapcam.pos.z = player.pos.z;
+		lastteleport = player.pos = subj.orgTrans.pos = moveto = mse->pos + mse->point0;
 		lastteleport.y -= 180.f;
-		player.pos.y = subj.pos.y -= 180.f;
+		player.pos.y = subj.orgTrans.pos.y -= 180.f;
 		trans = mse->pos;
 	}
 #endif // BUILD_EDIT_LOADSAVE
 	else
 	{
 		lastteleport = player.baseOffset();
-		Mscenepos = trans = Vec3f::ZERO;
+		Mscenepos = trans = Vec3f_ZERO;
 	}
 	
 	MSP = trans;
@@ -782,7 +743,7 @@ long DanaeLoadLevel(const res::path & file, bool loadEntities) {
 			}
 			
 			res::path classPath = res::path::load(pathstr).remove_ext();
-			LoadInter_Ex(classPath, dli->ident, dli->pos, dli->angle, trans);
+			LoadInter_Ex(classPath, dli->ident, dli->pos.toVec3(), dli->angle, trans);
 		}
 	}
 	
@@ -849,10 +810,10 @@ long DanaeLoadLevel(const res::path & file, bool loadEntities) {
 				el->falldiff = el->fallend - el->fallstart;
 				el->falldiffmul = 1.f / el->falldiff;
 				el->intensity = dlight->intensity;
-				el->pos = dlight->pos;
+				el->pos = dlight->pos.toVec3();
 				el->rgb = dlight->rgb;
 				
-				el->extras = checked_range_cast<short>(dlight->extras);
+				el->extras = ExtrasType::load(dlight->extras);
 				
 				el->ex_flicker = dlight->ex_flicker;
 				el->ex_radius = dlight->ex_radius;
@@ -892,7 +853,7 @@ long DanaeLoadLevel(const res::path & file, bool loadEntities) {
 			fd->exist = 1;
 			fd->rgb = dlf->rgb;
 			fd->angle = dlf->angle;
-			fd->pos = Vec3f(dlf->pos) + trans;
+			fd->pos = dlf->pos.toVec3() + trans;
 			fd->blend = dlf->blend;
 			fd->frequency = dlf->frequency;
 			fd->rotatespeed = dlf->rotatespeed;
@@ -905,9 +866,9 @@ long DanaeLoadLevel(const res::path & file, bool loadEntities) {
 			fd->move.y = 0.f;
 			fd->move.z = 0.f;
 			Vec3f out;
-			float ta = radians(MAKEANGLE(fd->angle.b));
+			float ta = radians(MAKEANGLE(fd->angle.getPitch()));
 			YRotatePoint(&fd->move, &out, EEcos(ta), EEsin(ta));
-			float tb = radians(MAKEANGLE(fd->angle.a));
+			float tb = radians(MAKEANGLE(fd->angle.getYaw()));
 			XRotatePoint(&out, &fd->move, EEcos(tb), EEsin(tb));
 		}
 	}
@@ -927,7 +888,7 @@ long DanaeLoadLevel(const res::path & file, bool loadEntities) {
 		pos += sizeof(DANAE_LS_NODE);
 		
 		strcpy(nodes.nodes[i].name, boost::to_lower_copy(util::loadString(dln->name)).c_str());
-		nodes.nodes[i].pos = (Vec3f)dln->pos + trans;
+		nodes.nodes[i].pos = dln->pos.toVec3() + trans;
 		
 		for(long j = 0; j < dlh.nb_nodeslinks; j++) {
 			if(dat[pos] != '\0') {
@@ -952,11 +913,11 @@ long DanaeLoadLevel(const res::path & file, bool loadEntities) {
 		const DANAE_LS_PATH * dlp = reinterpret_cast<const DANAE_LS_PATH *>(dat + pos);
 		pos += sizeof(DANAE_LS_PATH);
 		
-		Vec3f ppos = Vec3f(dlp->initpos) + trans;
+		Vec3f ppos = dlp->initpos.toVec3() + trans;
 		ARX_PATH * ap = ARXpaths[i] = new ARX_PATH(boost::to_lower_copy(util::loadString(dlp->name)), ppos);
 		
 		ap->flags = PathFlags::load(dlp->flags); // TODO save/load flags
-		ap->pos = Vec3f(dlp->pos) + trans;
+		ap->pos = dlp->pos.toVec3() + trans;
 		ap->nb_pathways = dlp->nb_pathways;
 		ap->height = dlp->height;
 		ap->ambiance = res::path::load(util::loadString(dlp->ambiance));
@@ -979,7 +940,7 @@ long DanaeLoadLevel(const res::path & file, bool loadEntities) {
 			pos += sizeof(DANAE_LS_PATHWAYS);
 			
 			app[j].flag = (PathwayType)dlpw->flag; // save/load enum
-			app[j].rpos = dlpw->rpos;
+			app[j].rpos = dlpw->rpos.toVec3();
 			app[j]._time = static_cast<float>(dlpw->time);
 		}
 	}
@@ -1014,7 +975,7 @@ long DanaeLoadLevel(const res::path & file, bool loadEntities) {
 	if(!dat) {
 		LOADEDD = 1;
 		FASTmse = 0;
-		USE_PLAYERCOLLISIONS = 1;
+		USE_PLAYERCOLLISIONS = true;
 		LogInfo << "Done loading level";
 		return 1;
 	}
@@ -1046,15 +1007,14 @@ long DanaeLoadLevel(const res::path & file, bool loadEntities) {
 			el->falldiffmul = 1.f / el->falldiff;
 			el->intensity = dlight->intensity;
 			
+			el->pos = dlight->pos.toVec3();
 			if(FASTmse) {
-				el->pos = Vec3f(dlight->pos) + trans;
-			} else {
-				el->pos = dlight->pos;
-			}
+				el->pos += trans;
+			} 
 			
 			el->rgb = dlight->rgb;
 			
-			el->extras = checked_range_cast<short>(dlight->extras);
+			el->extras = ExtrasType::load(dlight->extras);
 			
 			el->ex_flicker = dlight->ex_flicker;
 			el->ex_radius = dlight->ex_radius;
@@ -1118,7 +1078,7 @@ long DanaeLoadLevel(const res::path & file, bool loadEntities) {
 	
 	LOADEDD = 1;
 	FASTmse = 0;
-	USE_PLAYERCOLLISIONS = 1;
+	USE_PLAYERCOLLISIONS = true;
 	
 	LogInfo << "Done loading level";
 	
@@ -1127,7 +1087,6 @@ long DanaeLoadLevel(const res::path & file, bool loadEntities) {
 }
 
 void MCache_ClearAll();
-extern TextureContainer * MapMarkerTc;
 long FAST_RELEASE = 0;
 extern Entity * FlyingOverIO;
 extern unsigned long LAST_JUMP_ENDTIME;
@@ -1142,24 +1101,23 @@ extern long JUST_RELOADED;
 void DanaeClearLevel(long flag)
 {
 	JUST_RELOADED = 0;
-	ARX_MINIMAP_Reset();
+	g_miniMap.reset();
 
 	FADEDIR = 0;
 	FADEDURATION = 0;
 	LAST_JUMP_ENDTIME = 0;
 	FAST_RELEASE = 1;
 	MCache_ClearAll();
-	ARX_MINIMAP_PurgeTC();
+	g_miniMap.purgeTexContainer();
 	ARX_GAME_Reset(flag);
 	FlyingOverIO = NULL;
 
 	EERIE_PATHFINDER_Release();
 
 	InitBkg(ACTIVEBKG, MAX_BKGX, MAX_BKGZ, BKG_SIZX, BKG_SIZZ);
-	RemoveAllBackgroundActions();
 	ClearNodes();
 	
-#ifdef BUILD_EDIT_LOADSAVE
+#if BUILD_EDIT_LOADSAVE
 	if(mse != NULL) {
 		ReleaseMultiScene(mse);
 		mse = NULL;
@@ -1179,7 +1137,7 @@ void DanaeClearLevel(long flag)
 	delete stone1, stone1 = NULL, stone1_count = 0;
 	
 	TextureContainer::DeleteAll(TextureContainer::Level);
-	MapMarkerTc = NULL;
+	g_miniMap.clearMarkerTexCont();
 	
 	arxtime.init();
 	
@@ -1201,49 +1159,38 @@ void DanaeClearAll()
 	DanaeClearLevel();
 }
 
-//*************************************************************************************
-//*************************************************************************************
-
 void RestoreLastLoadedLightning()
 {
 	long pos = 0;
 	long bcount = CountBkgVertex();
 
-	if (LastLoadedLightningNb <= 0) return;
+	if(LastLoadedLightningNb <= 0)
+		return;
 
-	if (LastLoadedLightning == NULL) return;
+	if(LastLoadedLightning == NULL)
+		return;
 
-	if (bcount != LastLoadedLightningNb)
-	{
+	if(bcount != LastLoadedLightningNb) {
 		free(LastLoadedLightning);
 		LastLoadedLightning = NULL;
 		LastLoadedLightningNb = 0;
 		return;
 	}
 
-	EERIE_BKG_INFO * eg;
-
 	EERIE_BACKGROUND * eb = ACTIVEBKG;
 
 	bcount = LastLoadedLightningNb;
 
-	EERIEPOLY * ep;
-	long nbvert;
+	for(long j = 0; j < eb->Zsize; j++)
+		for(long i = 0; i < eb->Xsize; i++) {
+			EERIE_BKG_INFO *eg = (EERIE_BKG_INFO *)&eb->Backg[i+j*eb->Xsize];
 
-	for (long j = 0; j < eb->Zsize; j++)
-		for (long i = 0; i < eb->Xsize; i++)
-		{
-			eg = (EERIE_BKG_INFO *)&eb->Backg[i+j*eb->Xsize];
+			for(long l = 0; l < eg->nbpoly; l++) {
+				EERIEPOLY *ep = &eg->polydata[l];
 
-			for (long l = 0; l < eg->nbpoly; l++)
-			{
-				ep = &eg->polydata[l];
+				long nbvert = (ep->type & POLY_QUAD) ? 4 : 3;
 
-				if (ep->type & POLY_QUAD) nbvert = 4;
-				else nbvert = 3;
-
-				for (long k = 0; k < nbvert; k++)
-				{
+				for(long k = 0; k < nbvert; k++) {
 					u32 dc = LastLoadedLightning[pos];
 					pos++;
 					dc = dc | 0xFF000000;
@@ -1251,7 +1198,8 @@ void RestoreLastLoadedLightning()
 					ep->tv[k].specular = ep->v[k].specular = 0xFF000000;
 					bcount--;
 
-					if (bcount <= 0) goto plusloin;
+					if(bcount <= 0)
+						goto plusloin;
 				}
 			}
 		}
@@ -1261,27 +1209,4 @@ plusloin:
 	free(LastLoadedLightning);
 	LastLoadedLightning = NULL;
 	LastLoadedLightningNb = 0;
-
-	for (size_t i = 0; i < MAX_ACTIONS; i++)
-	{
-		if (actions[i].exist)
-		{
-			long modd = 0;
-
-			switch (actions[i].type)
-			{
-				case ACT_FIRE:
-					modd = 1;
-					break;
-				case ACT_FIRE2:
-					modd = 1;
-					break;
-				case ACT_FIREOFF:
-				case ACT_FIRE2OFF:
-					break;
-			}
-
-			if (modd) RecalcLightZone(actions[i].pos.x, actions[i].pos.z, (long)((float)(DynLight[actions[i].dl].fallend * ACTIVEBKG->Xmul) + 5.f));
-		}
-	}
 }

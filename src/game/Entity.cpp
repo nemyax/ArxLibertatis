@@ -47,6 +47,7 @@ ZeniMax Media Inc., Suite 120, Rockville, Maryland 20850 USA.
 #include <iomanip>
 #include <cstring>
 
+#include "animation/Animation.h"
 #include "ai/Paths.h"
 
 #include "core/Core.h"
@@ -76,11 +77,11 @@ Entity::Entity(const res::path & classPath)
 	m_index = entities.add(this);
 	
 	ioflags = 0;
-	lastpos = Vec3f::ZERO;
-	pos = Vec3f::ZERO;
-	move = Vec3f::ZERO;
-	lastmove = Vec3f::ZERO;
-	forcedmove = Vec3f::ZERO;
+	lastpos = Vec3f_ZERO;
+	pos = Vec3f_ZERO;
+	move = Vec3f_ZERO;
+	lastmove = Vec3f_ZERO;
+	forcedmove = Vec3f_ZERO;
 	
 	angle = Anglef::ZERO;
 	std::memset(&physics, 0, sizeof(IO_PHYSICS)); // TODO use constructor
@@ -92,19 +93,20 @@ Entity::Entity(const res::path & classPath)
 	obj = NULL;
 	std::fill_n(anims, MAX_ANIMS, (ANIM_HANDLE *)NULL);
 	std::memset(animlayer, 0, sizeof(ANIM_USE) * MAX_ANIM_LAYERS); // TODO use constructor
-	lastanimvertex = NULL;
-	nb_lastanimvertex = 0;
-	lastanimtime = 0;
+
+	animBlend.nb_lastanimvertex = 0;
+	animBlend.lastanimtime = 0;
 	
 	std::memset(&bbox3D, 0, sizeof(EERIE_3D_BBOX)); // TODO use constructor
 	
-	bbox1 = Vec2s(-1, -1);
-	bbox2 = Vec2s(-1, -1);
+	bbox2D.min = Vec2f(-1.f, -1.f);
+	bbox2D.max = Vec2f(-1.f, -1.f);
+
 	tweaky = NULL;
 	sound = audio::INVALID_ID;
 	type_flags = 0;
 	scriptload = 0;
-	target = Vec3f::ZERO;
+	target = Vec3f_ZERO;
 	targetinfo = TARGET_NONE;
 	
 	_itemdata = NULL, _fixdata = NULL, _npcdata = NULL, _camdata = NULL;
@@ -118,11 +120,11 @@ Entity::Entity(const res::path & classPath)
 	ident = 0;
 	weight = 1.f;
 	gameFlags = GFLAG_NEEDINIT | GFLAG_INTERACTIVITY;
-	velocity = Vec3f::ZERO;
+	velocity = Vec3f_ZERO;
 	fall = 0.f;
 	
 	stopped = 1;
-	initpos = Vec3f::ZERO;
+	initpos = Vec3f_ZERO;
 	initangle = Anglef::ZERO;
 	scale = 1.f;
 	
@@ -161,7 +163,6 @@ Entity::Entity(const res::path & classPath)
 	flarecount = 0;
 	no_collide = -1;
 	invisibility = 0.f;
-	frameloss = 0.f;
 	basespeed = 1.f;
 	
 	speed_modif = 0.f;
@@ -190,6 +191,9 @@ Entity::Entity(const res::path & classPath)
 	inzone_show = 0;
 	summoner = 0;
 	spark_n_blood = 0;
+
+	special_color = Color3f::white;
+	highlightColor = Color3f::black;
 	
 	ARX_SCRIPT_SetMainEvent(this, "main");
 	
@@ -263,7 +267,6 @@ Entity::~Entity() {
 		DynLight[halo.dynlight].exist = 0, halo.dynlight = -1;
 	}
 	
-	free(lastanimvertex);
 	free(usepath);
 	free(symboldraw), symboldraw = NULL;
 	

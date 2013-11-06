@@ -29,16 +29,16 @@
 
 #include "Configure.h"
 
-#ifdef ARX_HAVE_WINAPI
+#if ARX_PLATFORM == ARX_PLATFORM_WIN32
 #include <windows.h>
 #include <shlobj.h>
 #endif
 
-#ifdef ARX_HAVE_WORDEXP_H
+#if ARX_HAVE_WORDEXP
 #include <wordexp.h>
 #endif
 
-#ifdef ARX_HAVE_READLINK
+#if ARX_HAVE_READLINK
 #include <unistd.h>
 #endif
 
@@ -47,18 +47,23 @@
 #include <sys/param.h>
 #endif
 
-#ifdef ARX_HAVE_SYSCTL
+#if ARX_HAVE_SYSCTL
 #include <sys/types.h>
 #include <sys/sysctl.h>
+#include <fcntl.h>
 #endif
 
-#include "platform/Platform.h"
+#include "io/fs/PathConstants.h"
+#include "io/fs/FilePath.h"
+#include "io/fs/Filesystem.h"
 #include "util/String.h"
 
 
+namespace platform {
+
 std::string expandEnvironmentVariables(const std::string & in) {
 	
-#if defined(ARX_HAVE_WORDEXP_H)
+#if ARX_HAVE_WORDEXP
 	
 	wordexp_t p;
 	
@@ -79,7 +84,7 @@ std::string expandEnvironmentVariables(const std::string & in) {
 	
 	return oss.str();
 	
-#elif defined(ARX_HAVE_WINAPI)
+#elif ARX_PLATFORM == ARX_PLATFORM_WIN32
 	
 	size_t length = std::max<size_t>(in.length() * 2, 1024);
 	boost::scoped_array<char> buffer(new char[length]);
@@ -104,7 +109,7 @@ std::string expandEnvironmentVariables(const std::string & in) {
 #endif
 }
 
-#ifdef ARX_HAVE_WINAPI
+#if ARX_PLATFORM == ARX_PLATFORM_WIN32
 static bool getRegistryValue(HKEY hkey, const std::string & name, std::string & result) {
 	
 	boost::scoped_array<char> buffer(NULL);
@@ -145,7 +150,7 @@ static bool getRegistryValue(HKEY hkey, const std::string & name, std::string & 
 
 bool getSystemConfiguration(const std::string & name, std::string & result) {
 	
-#ifdef ARX_HAVE_WINAPI
+#if ARX_PLATFORM == ARX_PLATFORM_WIN32
 	
 	if(getRegistryValue(HKEY_CURRENT_USER, name, result)) {
 		return true;
@@ -168,7 +173,7 @@ void defineSystemDirectories(const char * argv0) {
 	ARX_UNUSED(argv0);
 }
 
-#elif defined(ARX_HAVE_WINAPI)
+#elif ARX_PLATFORM == ARX_PLATFORM_WIN32
 
 std::string ws2s(const std::basic_string<WCHAR> & s) {
 	size_t slength = (int)s.length() + 1;
@@ -240,7 +245,7 @@ void defineSystemDirectories(const char * argv0) {
 
 #endif
 
-#if defined(ARX_HAVE_READLINK) && ARX_PLATFORM != ARX_PLATFORM_MACOSX
+#if ARX_HAVE_READLINK && ARX_PLATFORM != ARX_PLATFORM_MACOSX
 static bool try_readlink(std::vector<char> & buffer, const char * path) {
 	
 	int ret = readlink(path, &buffer.front(), buffer.size());
@@ -258,7 +263,7 @@ static bool try_readlink(std::vector<char> & buffer, const char * path) {
 }
 #endif
 
-std::string getExecutablePath() {
+fs::path getExecutablePath() {
 	
 #if ARX_PLATFORM == ARX_PLATFORM_MACOSX
 	
@@ -276,35 +281,35 @@ std::string getExecutablePath() {
 		}
 	}
 	
-#elif defined(ARX_HAVE_WINAPI)
+#elif ARX_PLATFORM == ARX_PLATFORM_WIN32
 	
 	std::vector<char> buffer;
 	buffer.resize(MAX_PATH);
 	if(GetModuleFileNameA(NULL, &*buffer.begin(), buffer.size()) > 0) {
-		return std::string(buffer.begin(), buffer.end());
+		return fs::path(&*buffer.begin(), &*buffer.end());
 	}
 	
 #else
 	
 	// Try to get the path from OS-specific procfs entries
-	#ifdef ARX_HAVE_READLINK
+	#if ARX_HAVE_READLINK
 	std::vector<char> buffer(1024);
 	// Linux
 	if(try_readlink(buffer, "/proc/self/exe")) {
-		return std::string(buffer.begin(), buffer.end());
+		return fs::path(&*buffer.begin(), &*buffer.end());
 	}
 	// BSD
 	if(try_readlink(buffer, "/proc/curproc/file")) {
-		return std::string(buffer.begin(), buffer.end());
+		return fs::path(&*buffer.begin(), &*buffer.end());
 	}
 	// Solaris
 	if(try_readlink(buffer, "/proc/self/path/a.out")) {
-		return std::string(buffer.begin(), buffer.end());
+		return fs::path(&*buffer.begin(), &*buffer.end());
 	}
 	#endif
 	
 	// FreeBSD
-	#if defined(ARX_HAVE_SYSCTL) && defined(CTL_KERN) && defined(KERN_PROC) \
+	#if ARX_HAVE_SYSCTL && defined(CTL_KERN) && defined(KERN_PROC) \
 	    && defined(KERN_PROC_PATHNAME) && ARX_PLATFORM == ARX_PLATFORM_BSD \
 	    && defined(PATH_MAX)
 	int mib[4];
@@ -321,7 +326,7 @@ std::string getExecutablePath() {
 	#endif
 	
 	// Solaris
-	#ifdef ARX_HAVE_GETEXECNAME
+	#if ARX_HAVE_GETEXECNAME
 	const char * execname = getexecname();
 	if(execname != NULL) {
 		return execname;
@@ -339,6 +344,34 @@ std::string getExecutablePath() {
 #endif
 	
 	// Give up - we couldn't determine the exe path.
-	return std::string();
+	return fs::path();
 }
 
+fs::path getHelperExecutable(const std::string & name) {
+	
+	fs::path exe = getExecutablePath();
+	if(!exe.empty()) {
+		if(exe.is_relative()) {
+			exe = fs::current_path() / exe;
+		}
+		fs::path helper = exe.parent() / name;
+		if(fs::is_regular_file(helper)) {
+			return helper;
+		}
+		helper = exe.parent().parent() / name;
+		if(fs::is_regular_file(helper)) {
+			return helper;
+		}
+	}
+	
+	if(fs::libexec_dir) {
+		fs::path helper = fs::path(fs::libexec_dir) / name;
+		if(fs::is_regular_file(helper)) {
+			return helper;
+		}
+	}
+	
+	return fs::path(name);
+}
+
+} // namespace platform

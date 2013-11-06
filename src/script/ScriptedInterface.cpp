@@ -56,7 +56,6 @@ ZeniMax Media Inc., Suite 120, Rockville, Maryland 20850 USA.
 using std::string;
 
 extern float InventoryDir;
-extern long REFUSE_GAME_RETURN;
 
 namespace script {
 
@@ -300,10 +299,8 @@ public:
 		
 		DebugScript("");
 		
-		REFUSE_GAME_RETURN = 1;
-		
 		ARX_SOUND_MixerStop(ARX_SOUND_MixerGame);
-		ARX_MENU_Launch();
+		ARX_MENU_Launch(false);
 		ARX_MENU_Clicked_CREDITS();
 		
 		return Success;
@@ -330,7 +327,7 @@ public:
 			
 			DebugScript(' ' << options << ' ' << marker);
 			
-			ARX_MAPMARKER_Remove(marker);
+			g_miniMap.mapMarkerRemove(marker);
 			
 		} else {
 			
@@ -342,7 +339,7 @@ public:
 			
 			DebugScript(' ' << options << ' ' << x << ' ' << y << ' ' << level << ' ' << marker);
 			
-			ARX_MAPMARKER_Add(x, y, level, marker);
+			g_miniMap.mapMarkerAdd(x, y, level, marker);
 			
 		}
 		

@@ -24,7 +24,7 @@
 
 #include "platform/Platform.h"
 
-#ifdef ARX_HAVE_ISATTY
+#if ARX_HAVE_ISATTY
 
 namespace logger {
 
@@ -53,12 +53,16 @@ void ColorConsole::log(const Source & file, int line, Logger::LogLevel level,
 	}
 	(*os) << ' ' << file.name << "\e[m:\e[0;33m";
 	
+	std::ostream::fmtflags flags = os->flags();
+	
 	length += 1 + file.name.length() + 1;
 	if(length < alignment) {
 		(*os) << std::left << std::setfill(' ') << std::setw(alignment - length);
 	}
 	
 	(*os) << line << " " << c << str << e << std::endl;
+	
+	os->flags(flags);
 }
 
 void ColorConsole::flush() {
@@ -67,4 +71,4 @@ void ColorConsole::flush() {
 
 } // namespace logger
 
-#endif // #ifdef ARX_HAVE_ISATTY
+#endif // ARX_HAVE_ISATTY

@@ -48,6 +48,8 @@ ZeniMax Media Inc., Suite 120, Rockville, Maryland 20850 USA.
 
 #include <algorithm>
 
+#include <glm/gtx/norm.hpp>
+
 #include "core/Application.h"
 #include "core/Config.h"
 #include "core/Core.h"
@@ -65,6 +67,7 @@ ZeniMax Media Inc., Suite 120, Rockville, Maryland 20850 USA.
 #include "graphics/Math.h"
 #include "graphics/data/TextureContainer.h"
 #include "graphics/effects/SpellEffects.h"
+#include "graphics/particle/MagicFlare.h"
 
 #include "input/Input.h"
 
@@ -102,8 +105,6 @@ static const size_t MAX_PARTICLES = 2200;
 static long ParticleCount = 0;
 static PARTICLE_DEF particle[MAX_PARTICLES];
 
-FLARETC			flaretc;
-FLARES			flare[MAX_FLARES];
 static TextureContainer * bloodsplat[6];
 TextureContainer * water_splat[3];
 static TextureContainer * water_drop[3];
@@ -113,24 +114,10 @@ static TextureContainer * healing = NULL;
 static TextureContainer * tzupouf = NULL;
 TextureContainer * fire2=NULL;
 
-static OBJFX objfx[MAX_OBJFX];
-long			BoomCount=0;
- 
-long			flarenum=0;
 short			OPIPOrgb=0;
 short			PIPOrgb=0;
-static short shinum = 1;
+
 long			NewSpell=0;
-
-long ARX_BOOMS_GetFree() {
-	for(long i=0;i<MAX_POLYBOOM;i++) 
-	{
-		if (!polyboom[i].exist) 
-			return i;
-	}
-
-	return -1;
-}
 
 long getParticleCount() {
 	return ParticleCount;
@@ -143,7 +130,7 @@ void LaunchDummyParticle() {
 		return;
 	}
 	
-	float f = radians(player.angle.b);
+	float f = radians(player.angle.getPitch());
 	pd->ov = player.pos + Vec3f(EEsin(f) * 100.f, 0.f, -EEcos(f) * 100.f);
 	pd->tolive = 600;
 	pd->tc = smokeparticle;
@@ -201,7 +188,7 @@ static void ARX_PARTICLES_Spawn_Rogue_Blood(const Vec3f & pos, float dmgs, Color
 	
 	pd->ov = pos;
 	pd->siz = 3.1f * (dmgs * (1.f / 60) + .9f);
-	pd->scale = Vec3f::repeat(-pd->siz * 0.25f);
+	pd->scale = Vec3f(-pd->siz * 0.25f);
 	pd->special = PARTICLE_SUB2 | SUBSTRACT | GRAVITY | ROTATING | MODULATE_ROTATION
 	              | SPLAT_GROUND;
 	pd->tolive = 1600;
@@ -223,7 +210,7 @@ static void ARX_PARTICLES_Spawn_Blood3(const Vec3f & pos, float dmgs, Color col,
 		pd->ov = pos + Vec3f(-sin(float(arxtime) * 0.001f), sin(float(arxtime) * 0.001f),
 		               cos(float(arxtime) * 0.001f)) * 30.f;
 		pd->siz = 3.5f * power + sin(float(arxtime) * (1.f/1000));
-		pd->scale = Vec3f::repeat(-pd->siz * 0.5f);
+		pd->scale = Vec3f(-pd->siz * 0.5f);
 		pd->special = PARTICLE_SUB2 | SUBSTRACT | GRAVITY | ROTATING | MODULATE_ROTATION
 		              | flags;
 		pd->tolive = 1100;
@@ -238,71 +225,71 @@ static void ARX_PARTICLES_Spawn_Blood3(const Vec3f & pos, float dmgs, Color col,
 	
 }
 
-#define SPLAT_MULTIPLY 1.f
-
 void ARX_POLYSPLAT_Add(Vec3f * poss, Color3f * col, float size, long flags) {
 	
-	if (BoomCount > (MAX_POLYBOOM >> 2) - 30) return;
+	if(polyboom.size() > (MAX_POLYBOOM >> 2) - 30)
+		return;
 
-	if ((BoomCount>250.f) 
-		&& (size<10)) return;
+	if(polyboom.size() > 250 && size < 10)
+		return;
 
 	float splatsize=90;
 
-	if (size>40.f) size=40.f;	
+	if(size > 40.f)
+		size = 40.f;
 
-	size*=0.75f;
+	size *= 0.75f;
 
-	switch (config.video.levelOfDetail)
-	{
+	switch(config.video.levelOfDetail) {
 		case 2:
+			if(polyboom.size() > 160)
+				return;
 
-			if (BoomCount>160.f)  return;
-
-			splatsize=90;
-			size*=1.f;
+			splatsize = 90;
+			size *= 1.f;
 		break;
 		case 1:
+			if(polyboom.size() > 60)
+				return;
 
-			if (BoomCount>60.f)  return;
-
-			splatsize=60;
-			size*=0.5f;
+			splatsize = 60;
+			size *= 0.5f;
 		break;
 		default:
+			if(polyboom.size() > 10)
+				return;
 
-			if (BoomCount>10.f)  return;
-
-			splatsize=30;
-			size*=0.25f;
+			splatsize = 30;
+			size *= 0.25f;
 		break;
 	}
 
 
 	float py;
-	EERIEPOLY * ep=CheckInPoly(poss->x,poss->y-40,poss->z,&py);
+	EERIEPOLY *ep = CheckInPoly(poss->x, poss->y-40, poss->z, &py);
 
-	if (!ep) return;
+	if(!ep)
+		return;
 	
-
-	if (flags & 1) py=poss->y;
+	if(flags & 1)
+		py=poss->y;
 
 	EERIEPOLY TheoricalSplat; // clockwise
-	TheoricalSplat.v[0].p.x=-splatsize*SPLAT_MULTIPLY;
+	TheoricalSplat.v[0].p.x=-splatsize;
 	TheoricalSplat.v[0].p.y = py; 
-	TheoricalSplat.v[0].p.z=-splatsize*SPLAT_MULTIPLY;
+	TheoricalSplat.v[0].p.z=-splatsize;
 
-	TheoricalSplat.v[1].p.x=-splatsize*SPLAT_MULTIPLY;
+	TheoricalSplat.v[1].p.x=-splatsize;
 	TheoricalSplat.v[1].p.y = py; 
-	TheoricalSplat.v[1].p.z=+splatsize*SPLAT_MULTIPLY;
+	TheoricalSplat.v[1].p.z=+splatsize;
 
-	TheoricalSplat.v[2].p.x=+splatsize*SPLAT_MULTIPLY;
+	TheoricalSplat.v[2].p.x=+splatsize;
 	TheoricalSplat.v[2].p.y = py; 
-	TheoricalSplat.v[2].p.z=+splatsize*SPLAT_MULTIPLY;
+	TheoricalSplat.v[2].p.z=+splatsize;
 
-	TheoricalSplat.v[3].p.x=+splatsize*SPLAT_MULTIPLY;
+	TheoricalSplat.v[3].p.x=+splatsize;
 	TheoricalSplat.v[3].p.y = py; 
-	TheoricalSplat.v[3].p.z=-splatsize*SPLAT_MULTIPLY;
+	TheoricalSplat.v[3].p.z=-splatsize;
 	TheoricalSplat.type=POLY_QUAD;
 
 	Vec3f RealSplatStart(-size, py, -size);
@@ -322,159 +309,113 @@ void ARX_POLYSPLAT_Add(Vec3f * poss, Color3f * col, float size, long flags) {
 	RealSplatStart.x+=poss->x;
 	RealSplatStart.z+=poss->z;
 
-
 	float hdiv,vdiv;
 	hdiv=vdiv=1.f/(size*2);
 
+	unsigned long tim = (unsigned long)(arxtime);
 
-	long x0,x1;
-	long z0,z1,i,j;
-	unsigned long tim;
-	long n;
-	EERIE_BKG_INFO * eg;
-	tim = (unsigned long)(arxtime);
+	std::vector<POLYBOOM>::iterator pb = polyboom.begin();
+	while(pb != polyboom.end()) {
 
-	for (i=0;i<MAX_POLYBOOM;i++)
-	{
-		if (polyboom[i].exist)
-		{
-			polyboom[i].type|=128;
-		}
+		//TODO what does this do ?
+		pb->type |= 128;
+		++ pb;
 	}
 
-	x0 = static_cast<long>(poss->x * ACTIVEBKG->Xmul);
-	z0 = static_cast<long>(poss->z * ACTIVEBKG->Zmul);
-	x1 = x0 + 3; 
-	x0 = x0 - 3; 
-	z1 = z0 + 3; 
-	z0 = z0 - 3; 
+	long px = poss->x * ACTIVEBKG->Xmul;
+	long pz = poss->z * ACTIVEBKG->Zmul;
 
-	if (x0<0) x0=0;
+	long x0 = clamp(px - 3, 0, ACTIVEBKG->Xsize - 1);
+	long x1 = clamp(px + 3, 0, ACTIVEBKG->Xsize - 1);
+	long z0 = clamp(pz - 3, 0, ACTIVEBKG->Zsize - 1);
+	long z1 = clamp(pz + 3, 0, ACTIVEBKG->Zsize - 1);
 
-	if (x0>=ACTIVEBKG->Xsize) x0=ACTIVEBKG->Xsize-1;
+	for(long j = z0; j <= z1; j++)
+	for(long i = x0; i <= x1; i++) {
+		EERIE_BKG_INFO *eg = &ACTIVEBKG->Backg[i + j * ACTIVEBKG->Xsize];
 
-	if (x1<0) x1=0;
+		for(long l = 0; l < eg->nbpolyin; l++) {
+			EERIEPOLY *ep = eg->polyin[l];
 
-	if (x1>=ACTIVEBKG->Xsize) x1=ACTIVEBKG->Xsize-1;
+			if((flags & 2) && !(ep->type & POLY_WATER))
+				continue;
 
-	if (z0<0) z0=0;
+			if((ep->type & POLY_TRANS) && !(ep->type & POLY_WATER))
+				continue;
 
-	if (z0>=ACTIVEBKG->Zsize) z0=ACTIVEBKG->Zsize-1;
+			long nbvert = (ep->type & POLY_QUAD) ? 4 : 3;
 
-	if (z1<0) z1=0;
+			bool oki = false;
 
-	if (z1>=ACTIVEBKG->Zsize) z1=ACTIVEBKG->Zsize-1;
-
-	long nbvert;
-	float vratio=size*( 1.0f / 40 );
-
-
-	(void)checked_range_cast<short>(z0);
-	(void)checked_range_cast<short>(x0);
-	(void)checked_range_cast<short>(z1);
-	(void)checked_range_cast<short>(x1);
-
-
-
-	for (j=z0;j<=z1;j++) 		
-	for (i=x0;i<=x1;i++) 
-	{
-		eg=(EERIE_BKG_INFO *)&ACTIVEBKG->Backg[i+j*ACTIVEBKG->Xsize];
-
-			for (long l = 0; l < eg->nbpolyin; l++) 
-		{
-				ep = eg->polyin[l]; 
-
-			if (flags & 2)
-			{
-				if (!(ep->type & POLY_WATER)) continue;
-			}
-
-			if ((ep->type & POLY_TRANS) && !(ep->type & POLY_WATER)) continue;
-
-			if (ep->type & POLY_QUAD) nbvert=4;
-			else nbvert=3;
-
-			long oki=0;
-
-			for (long k=0;k<nbvert;k++)
-			{
-				if ((PointIn2DPolyXZ(&TheoricalSplat, ep->v[k].p.x, ep->v[k].p.z))
-					&& ((float)fabs(ep->v[k].p.y-py) < 100.f) )
+			for(long k = 0; k < nbvert; k++) {
+				if(PointIn2DPolyXZ(&TheoricalSplat, ep->v[k].p.x, ep->v[k].p.z)
+					&& fabs(ep->v[k].p.y-py) < 100.f)
 				{
-					 oki=1;
+					oki = true;
 					break;
 				}
 
-				if ((PointIn2DPolyXZ(&TheoricalSplat, (ep->v[k].p.x+ep->center.x)*( 1.0f / 2 ), (ep->v[k].p.z+ep->center.z)*( 1.0f / 2 )))
-					&& ((float)fabs(ep->v[k].p.y-py) < 100.f) )
+				if(PointIn2DPolyXZ(&TheoricalSplat, (ep->v[k].p.x+ep->center.x) * 0.5f, (ep->v[k].p.z+ep->center.z) * 0.5f)
+					&& fabs(ep->v[k].p.y-py) < 100.f)
 				{
-					 oki=1;
+					oki = true;
 					break;
 				}
 			}
 
-			if (!oki && (PointIn2DPolyXZ(&TheoricalSplat, ep->center.x, ep->center.z))
-					&& (EEfabs(ep->center.y-py)<100.f) )
-					oki=1;
+			if(!oki && PointIn2DPolyXZ(&TheoricalSplat, ep->center.x, ep->center.z) && EEfabs(ep->center.y-py) < 100.f)
+				oki = true;
 
-			
-			if (oki)
-			{
-				n=ARX_BOOMS_GetFree();
+			if(oki) {
 
-				if (n>=0) 
-				{
-					BoomCount++;
-					POLYBOOM * pb=&polyboom[n];
-					pb->type=1;	
+				if(polyboom.capacity() > 0) {
+					POLYBOOM pb;
 
-					if (flags & 2)
-						pb->type=2;	
+					if(flags & 2) {
+						pb.type = 2;
 
-					pb->exist=1;
-					pb->ep=ep;
+						long num = Random::get(0, 2);
+						pb.tc = water_splat[num];
 
-					long num = Random::get(0, 5);
-					pb->tc=bloodsplat[num];
+						pb.tolive=1500;
+					} else {
+						pb.type = 1;
 
-					float fRandom = rnd() * 2;
-					
-					int t = checked_range_cast<int>(fRandom);
+						long num = Random::get(0, 5);
+						pb.tc = bloodsplat[num];
 
-					if (flags & 2)
-						pb->tc = water_splat[t];
-
-					pb->tolive=(long)(float)(16000*vratio);
-
-					if (flags & 2)
-						pb->tolive=1500;
-					
-					pb->timecreation=tim;
-
-					pb->tx = static_cast<short>(i);
-					pb->tz = static_cast<short>(j);
-
-					pb->rgb = *col;
-
-					for (int k=0;k<nbvert;k++) 
-					{
-						float vdiff=EEfabs(ep->v[k].p.y-RealSplatStart.y);
-						pb->u[k]=(ep->v[k].p.x-RealSplatStart.x)*hdiv;
-
-						if (pb->u[k]<0.5f)
-							pb->u[k]-=vdiff*hdiv;
-						else pb->u[k]+=vdiff*hdiv;
-
-						pb->v[k]=(ep->v[k].p.z-RealSplatStart.z)*vdiv;
-
-						if (pb->v[k]<0.5f)
-							pb->v[k]-=vdiff*vdiv;
-						else pb->v[k]+=vdiff*vdiv;
-
+						pb.tolive=(long)(float)(16000 * size * (1.0f/40));
 					}
 
-					pb->nbvert=(short)nbvert;
+					pb.ep=ep;
+					
+					pb.timecreation=tim;
+
+					pb.tx = static_cast<short>(i);
+					pb.tz = static_cast<short>(j);
+
+					pb.rgb = *col;
+
+					for(int k = 0; k < nbvert; k++) {
+						float vdiff=EEfabs(ep->v[k].p.y-RealSplatStart.y);
+						pb.u[k]=(ep->v[k].p.x-RealSplatStart.x)*hdiv;
+
+						if(pb.u[k]<0.5f)
+							pb.u[k]-=vdiff*hdiv;
+						else
+							pb.u[k]+=vdiff*hdiv;
+
+						pb.v[k]=(ep->v[k].p.z-RealSplatStart.z)*vdiv;
+
+						if(pb.v[k]<0.5f)
+							pb.v[k]-=vdiff*vdiv;
+						else
+							pb.v[k]+=vdiff*vdiv;
+					}
+
+					pb.nbvert=(short)nbvert;
+
+					polyboom.push_back(pb);
 				}
 			}
 		}			
@@ -498,7 +439,8 @@ void ARX_PARTICLES_Spawn_Blood2(const Vec3f & pos, float dmgs, Color col, Entity
 		float power = (io->_npcdata->SPLAT_DAMAGES * (1.f/60)) + .9f;
 		
 		Vec3f vect = pos - io->_npcdata->last_splat_pos;
-		float dist = vect.normalize();
+		float dist = glm::length(vect);
+		vect = glm::normalize(vect);
 		long nb = long(dist / 4.f * power);
 		if(nb == 0) {
 			nb = 1;
@@ -512,7 +454,7 @@ void ARX_PARTICLES_Spawn_Blood2(const Vec3f & pos, float dmgs, Color col, Entity
 		}
 		
 		for(long k = 0; k < nb; k++) {
-			Vec3f posi = io->_npcdata->last_splat_pos + vect * k * 4.f * power;
+			Vec3f posi = io->_npcdata->last_splat_pos + vect * Vec3f(k * 4.f * power);
 			io->_npcdata->SPLAT_TOT_NB++;
 			if(io->_npcdata->SPLAT_TOT_NB > MAX_GROUND_SPLATS) {
 				ARX_PARTICLES_Spawn_Blood3(posi, io->_npcdata->SPLAT_DAMAGES, col, SPLAT_GROUND);
@@ -548,7 +490,7 @@ void ARX_PARTICLES_Spawn_Blood(Vec3f * pos, float dmgs, long source) {
 	long count = entities[source]->obj->nbgroups;
 	for(long i = 0; i < count; i += 2) {
 		long vertex = entities[source]->obj->grouplist[i].origin;
-		float dist = distSqr(*pos, entities[source]->obj->vertexlist3[vertex].v);
+		float dist = glm::distance2(*pos, entities[source]->obj->vertexlist3[vertex].v);
 		if(dist < nearest_dist) {
 			nearest_dist = dist;
 			nearest = i;
@@ -571,7 +513,7 @@ void ARX_PARTICLES_Spawn_Blood(Vec3f * pos, float dmgs, long source) {
 		}
 		
 		pd->siz = 0.f;
-		pd->scale = Vec3f::repeat(float(spawn_nb));
+		pd->scale = Vec3f(float(spawn_nb));
 		pd->special = GRAVITY | ROTATING | MODULATE_ROTATION | DELAY_FOLLOW_SOURCE;
 		pd->source = &entities[source]->obj->vertexlist3[nearest].v;
 		pd->sourceionum = source;
@@ -599,7 +541,7 @@ void ARX_PARTICLES_Spawn_Spark(Vec3f * pos, float dmgs, long flags) {
 	if(SPARK_COUNT < 1000) {
 		SPARK_COUNT += spawn_nb * 25;
 	} else {
-		SPARK_COUNT -= static_cast<long>(FrameDiff);
+		SPARK_COUNT -= static_cast<long>(framedelay);
 		return;
 	}
 	
@@ -660,7 +602,7 @@ void AddRandomSmoke(Entity * io, long amount) {
 		if(pd->siz < 4.f) {
 			pd->siz = 4.f;
 		}
-		pd->scale = Vec3f::repeat(10.f);
+		pd->scale = Vec3f(10.f);
 		pd->special = ROTATING | MODULATE_ROTATION | FADE_IN_AND_OUT;
 		pd->tolive = Random::get(900, 1300);
 		pd->move = Vec3f(0.25f - 0.5f * rnd(), -1.f * rnd() + 0.3f, 0.25f - 0.5f * rnd());
@@ -673,7 +615,7 @@ void AddRandomSmoke(Entity * io, long amount) {
 // flag 1 = randomize pos
 void ARX_PARTICLES_Add_Smoke(Vec3f * pos, long flags, long amount, Color3f * rgb) {
 	
-	Vec3f mod = (flags & 1) ? randomVec(-50.f, 50.f) : Vec3f::ZERO;
+	Vec3f mod = (flags & 1) ? randomVec(-50.f, 50.f) : Vec3f_ZERO;
 	
 	while(amount--) {
 		
@@ -706,7 +648,7 @@ void ManageTorch() {
 	
 	EERIE_LIGHT * el = &DynLight[0];
 	
-	if(SHOW_TORCH) {
+	if(player.torch) {
 		
 		float rr = rnd();
 		el->pos = player.pos;
@@ -736,12 +678,7 @@ void ManageTorch() {
 			el->exist = 0;
 		} else {
 			
-			long count = 0;
-			for(long i = 0; i < MAX_FLARES; i++) {
-				if(flare[i].exist && flare[i].flags == 0) {
-					count++;
-				}
-			}
+			long count = MagicFlareCountNonFlagged();
 			
 			if(count) {
 				float rr = rnd();
@@ -762,119 +699,8 @@ void ManageTorch() {
 	}
 }
 
-void ARX_MAGICAL_FLARES_Draw(long FRAMETICKS) {
-	
-	shinum++;
-	if(shinum >= 10) {
-		shinum = 1;
-	}
-	
-	long TICKS = long(arxtime) - FRAMETICKS;
-	if(TICKS < 0) {
-		return;
-	}
-	
-	GRenderer->SetRenderState(Renderer::DepthWrite, false);
-	GRenderer->SetBlendFunc(Renderer::BlendOne, Renderer::BlendOne);
-	GRenderer->SetRenderState(Renderer::AlphaBlending, true);
-	
-	bool key = !GInput->actionPressed(CONTROLS_CUST_MAGICMODE);
-	
-	for(long j = 1; j < 5; j++) {
-		
-		TextureContainer * surf;
-		switch(j) {
-			case 2:  surf = flaretc.lumignon; break;
-			case 3:  surf = flaretc.lumignon2; break;
-			case 4:  surf = flaretc.plasm; break;
-			default: surf = flaretc.shine[shinum]; break;
-		}
-		
-		for(long i = 0; i < MAX_FLARES; i++) {
-			
-			if(!flare[i].exist || flare[i].type != j) {
-				continue;
-			}
-			
-			flare[i].tolive -= float(TICKS * 2);
-			if(flare[i].flags & 1) {
-				flare[i].tolive -= float(TICKS * 4);
-			} else if (key) {
-				flare[i].tolive -= float(TICKS * 6);
-			}
-			
-			float z = (flare[i].tolive * 0.00025f);
-			float s;
-			if(flare[i].type == 1) {
-				s = flare[i].size * 2 * z;
-			} else if(flare[i].type == 4) {
-				s = flare[i].size * 2.f * z + 10.f;
-			} else {
-				s = flare[i].size;
-			}
-			
-			if(flare[i].tolive <= 0.f || flare[i].y < -64.f || s < 3.f) {
-				
-				if(flare[i].io && ValidIOAddress(flare[i].io)) {
-					flare[i].io->flarecount--;
-				}
-				
-				if(ValidDynLight(flare[i].dynlight)) {
-					DynLight[flare[i].dynlight].exist = 0;
-				}
-				
-				flare[i].dynlight = -1;
-				flare[i].exist = 0;
-				flarenum--;
-				
-				continue;
-			}
-			
-			if(flare[i].type == 1 && z < 0.6f)  {
-				z = 0.6f;
-			}
-			
-			Color3f c = flare[i].rgb * z;
-			flare[i].tv.color = c.toBGR();
-			flare[i].v.p = flare[i].tv.p;
-			
-			DynLight[0].rgb = componentwise_max(DynLight[0].rgb, c);
-			
-			if(ValidDynLight(flare[i].dynlight)) {
-				EERIE_LIGHT * el = &DynLight[flare[i].dynlight];
-				el->pos = flare[i].v.p;
-				el->rgb = c;
-			}
-			
-			if(!flare[i].io) {
-				GRenderer->SetRenderState(Renderer::DepthTest, false);
-			} else {
-				GRenderer->SetRenderState(Renderer::DepthTest, true);
-			}
-			
-			if(flare[i].bDrawBitmap) {
-				s *= 2.f;
-				EERIEDrawBitmap(flare[i].v.p.x, flare[i].v.p.y, s, s, flare[i].v.p.z,
-				                surf, Color::fromBGRA(flare[i].tv.color));
-			} else {
-				EERIEDrawSprite(&flare[i].v, s * 0.025f + 1.f, surf,
-				                Color::fromBGRA(flare[i].tv.color), 2.f);
-			}
-			
-		}
-	}
-	
-	DynLight[0].rgb = componentwise_min(DynLight[0].rgb, Color3f::white);
-	
-	GRenderer->SetRenderState(Renderer::DepthWrite, true);
-	GRenderer->SetRenderState(Renderer::DepthTest, true); 
-}
-
 void ARX_BOOMS_ClearAllPolyBooms() {
-	for(long i = 0; i < MAX_POLYBOOM; i++) {
-		polyboom[i].exist = 0;
-	}
-	BoomCount = 0;
+	polyboom.clear();
 }
 
 void ARX_BOOMS_Add(Vec3f * poss,long type) {
@@ -948,27 +774,25 @@ void ARX_BOOMS_Add(Vec3f * poss,long type) {
 				continue;
 			}
 			
-			long n = ARX_BOOMS_GetFree();
-			if(n < 0) {
+			if(polyboom.capacity() == 0) {
 				continue;
 			}
 			
-			BoomCount++;
-			POLYBOOM * pb = &polyboom[n];
-			pb->exist = 1;
+			POLYBOOM pb;
 			
-			pb->type = 0;
-			pb->ep = ep;
-			pb->tc = tc2;
-			pb->tolive = 10000;
-			pb->timecreation = long(arxtime);
-			pb->tx = short(i);
-			pb->tz = short(j);
+			pb.type = 0;
+			pb.ep = ep;
+			pb.tc = tc2;
+			pb.tolive = 10000;
+			pb.timecreation = long(arxtime);
+			pb.tx = short(i);
+			pb.tz = short(j);
 			for(int k = 0; k < nbvert; k++) {
-				pb->v[k] = pb->u[k] = temp_uv1[k];
+				pb.v[k] = pb.u[k] = temp_uv1[k];
 			}
-			pb->nbvert = short(nbvert);
-			
+			pb.nbvert = short(nbvert);
+
+			polyboom.push_back(pb);
 		}
 	}
 }
@@ -1003,106 +827,6 @@ void Add3DBoom(Vec3f * position) {
 				Vec3f vect = (entity->obj->pbox->vert[k].pos - *position) / dist;
 				entity->obj->pbox->vert[k].velocity += vect * ((300.f - dist) * 10.f);
 			}
-		}
-	}
-}
-
-void UpdateObjFx() {
-	
-	ColorBGRA c = Color::white.toBGR();
-	TexturedVertex v[3];
-	v[0] = TexturedVertex(Vec3f(0, 0, 0.001f), 1.f, c, 1, Vec2f::ZERO);
-	v[1] = TexturedVertex(Vec3f(0, 0, 0.001f), 1.f, c, 1, Vec2f::X_AXIS);
-	v[2] = TexturedVertex(Vec3f(0, 0, 0.001f), 1.f, c, 1, Vec2f::ONE);
-	TexturedVertex v2[3];
-	v[0] = TexturedVertex(Vec3f(0, 0, 0.001f), 1.f, c, 1, Vec2f::ZERO);
-	v[1] = TexturedVertex(Vec3f(0, 0, 0.001f), 1.f, c, 1, Vec2f::X_AXIS);
-	v[2] = TexturedVertex(Vec3f(0, 0, 0.001f), 1.f, c, 1, Vec2f::ONE);
-	
-	GRenderer->SetBlendFunc(Renderer::BlendOne, Renderer::BlendOne);
-	GRenderer->SetRenderState(Renderer::AlphaBlending, true);
-	GRenderer->SetRenderState(Renderer::DepthWrite, false);
-	
-	for(long i = 0; i < MAX_OBJFX; i++) {
-		
-		if(!objfx[i].exist) {
-			continue;
-		}
-		
-		unsigned long framediff = (unsigned long)(arxtime) - objfx[i].tim_start; 
-		if(framediff > objfx[i].duration) {
-			objfx[i].exist = false;
-			if(ValidDynLight(objfx[i].dynlight)) {
-				DynLight[objfx[i].dynlight].exist = 0;
-			}
-			objfx[i].dynlight = -1;
-			continue;
-		}
-		
-		float val = float(framediff) / float(objfx[i].duration);
-		Vec3f pos = objfx[i].pos + objfx[i].move * val;
-		
-		
-		Color3f color = Color3f(1.f - objfx[i].fade.r * val, 0.f,
-		                        1.f - objfx[i].fade.b * val);
-		if(!Project.improve) {
-			color.g = 1.f - objfx[i].fade.g * val;
-		}
-		
-		Vec3f scale = Vec3f::ONE + objfx[i].scale * val;
-		Anglef angle = Anglef::ZERO;
-		
-		DrawEERIEObjEx(objfx[i].obj, &angle, &pos, &scale, &color);
-		
-		if(objfx[i].dynlight != -1) {
-			DynLight[objfx[i].dynlight].fallend = 250.f + 450.f * val;
-			DynLight[objfx[i].dynlight].fallstart = 150.f + 50.f * val;
-			Color3f c(1.f - val, 0.9f-val * 0.9f, 0.5f - val * 0.5f);
-			DynLight[objfx[i].dynlight].rgb = c;
-			DynLight[objfx[i].dynlight].pos = pos;
-		}
-		
-		if(!(objfx[i].special & SPECIAL_RAYZ)) {
-			continue;
-		}
-		
-		GRenderer->SetCulling(Renderer::CullNone);
-		
-		for(long k = 0; k < 8; k++) {
-			float aa = objfx[i].spe[k].g;
-			float bb = objfx[i].speinc[k].g;
-			
-			if(!arxtime.is_paused()) {
-				objfx[i].spe[k].a += objfx[i].speinc[k].a;
-				objfx[i].spe[k].b += objfx[i].speinc[k].b;
-			}
-			
-			Vec3f t = scale * 100.f;
-			v[0].p = pos;
-			v[1].p.x = pos.x - EEsin(radians(objfx[i].spe[k].b)) * t.x;
-			v[1].p.y = pos.y + EEsin(radians(objfx[i].spe[k].a)) * t.y;
-			v[1].p.z = pos.z + EEcos(radians(objfx[i].spe[k].b)) * t.z;
-			v[2].p.x = pos.x - EEsin(radians(MAKEANGLE(objfx[i].spe[k].b + bb))) * t.x;
-			v[2].p.y = pos.y + EEsin(radians(MAKEANGLE(objfx[i].spe[k].a + aa))) * t.y;
-			v[2].p.z = pos.z + EEcos(radians(MAKEANGLE(objfx[i].spe[k].b + bb))) * t.z;
-			EE_RTP(&v[0], &v2[0]);
-			EE_RTP(&v[1], &v2[1]);
-			EE_RTP(&v[2], &v2[2]);
-			
-			if(Project.improve) {
-				for(long p = 0; p < 3; p++) {
-					v2[p].color = Color3f(color.r / (3.f + float(p)), 0.f,
-					                      color.b / (5.f + float(p))).toBGR();
-				}
-			} else {
-				for(long p = 0; p < 3; p++) {
-					v2[p].color = Color3f(color.r / (3.f + float(p)), color.g / (4.f + float(p)),
-					                      color.b / (5.f + float(p))).toBGR();
-				}
-			}
-			
-			GRenderer->ResetTexture(0);
-			EERIEDRAWPRIM(Renderer::TriangleFan, v2);
 		}
 	}
 }
@@ -1164,8 +888,8 @@ PARTICLE_DEF * createParticle(bool allocateWhilePaused) {
 		pd->source = NULL;
 		pd->delay = 0;
 		pd->zdec = false;
-		pd->move = Vec3f::ZERO;
-		pd->scale = Vec3f::ONE;
+		pd->move = Vec3f_ZERO;
+		pd->scale = Vec3f_ONE;
 		
 		return pd;
 	}
@@ -1270,7 +994,7 @@ void ARX_PARTICLES_Spawn_Splat(const Vec3f & pos, float dmgs, Color col) {
 		pd->tolive = (unsigned long)(1000 + dmgs*3);
 		pd->tc = blood_splat;
 		pd->siz = 0.3f + 0.01f * power;
-		pd->scale = Vec3f::repeat(0.2f + 0.3f * power);
+		pd->scale = Vec3f(0.2f + 0.3f * power);
 		pd->zdec = true;
 		pd->rgb = col.to<float>();
 	}
@@ -1325,9 +1049,9 @@ void SpawnFireballTail(Vec3f * poss, Vec3f * vecto, float level, long flags) {
 		if(flags & 1) {
 			pd->tolive = Random::get(400, 500);
 			pd->siz *= 0.7f;
-			pd->scale = Vec3f::repeat(level * 1.4f);
+			pd->scale = Vec3f(level * 1.4f);
 		} else {
-			pd->scale = Vec3f::repeat(level * 2.f);
+			pd->scale = Vec3f(level * 2.f);
 			pd->tolive=Random::get(800, 900);
 		}
 		
@@ -1336,7 +1060,7 @@ void SpawnFireballTail(Vec3f * poss, Vec3f * vecto, float level, long flags) {
 		
 		if(nn == 1) {
 			pd->delay = Random::get(150, 250);
-			pd->ov = *poss + *vecto * pd->delay;
+			pd->ov = *poss + *vecto * Vec3f(pd->delay);
 		} else {
 			pd->ov = *poss;
 		}
@@ -1362,7 +1086,7 @@ void LaunchFireballBoom(Vec3f * poss, float level, Vec3f * direction, Color3f * 
 	pd->tolive = Random::get(1600, 2200);
 	pd->tc = explo[0];
 	pd->siz = level * 3.f + 2.f * rnd();
-	pd->scale = Vec3f::repeat(level * 3.f);
+	pd->scale = Vec3f(level * 3.f);
 	pd->zdec = true;
 	pd->cval1 = 0;
 	pd->cval2 = MAX_EXPLO - 1;
@@ -1379,8 +1103,6 @@ void ARX_PARTICLES_Render(EERIE_CAMERA * cam)  {
 	if(!ACTIVEBKG) {
 		return;
 	}
-	
-	TreatBackgroundActions();
 	
 	if(ParticleCount == 0) {
 		return;
@@ -1417,7 +1139,7 @@ void ARX_PARTICLES_Render(EERIE_CAMERA * cam)  {
 				part->ov = *part->source;
 				Entity * target = entities[part->sourceionum];
 				Vec3f vector = (part->ov - target->pos) * Vec3f(1.f, 0.5f, 1.f);
-				vector.normalize();
+				vector = glm::normalize(vector);
 				part->move = vector * Vec3f(18.f, 5.f, 18.f) + randomVec(-0.5f, 0.5f);
 				
 			}
@@ -1425,15 +1147,10 @@ void ARX_PARTICLES_Render(EERIE_CAMERA * cam)  {
 		}
 		
 		if(!(part->type & PARTICLE_2D)) {
-			long xx = part->ov.x * ACTIVEBKG->Xmul;
-			long yy = part->ov.z * ACTIVEBKG->Zmul;
-			if(xx < 0 || yy < 0 || xx > ACTIVEBKG->Xsize || yy > ACTIVEBKG->Zsize) {
-				part->exist = false;
-				ParticleCount--;
-				continue;
-			}
-			FAST_BKG_DATA & feg = ACTIVEBKG->fastdata[xx][yy];
-			if(!feg.treat) {
+
+			FAST_BKG_DATA * bkgData = getFastBackgroundData(part->ov.x, part->ov.z);
+
+			if(!bkgData || !bkgData->treat) {
 				part->exist = false;
 				ParticleCount--;
 				continue;
@@ -1539,7 +1256,7 @@ void ARX_PARTICLES_Render(EERIE_CAMERA * cam)  {
 			
 			EERIE_SPHERE sp;
 			sp.origin = in.p;
-			EERIETreatPoint(&inn, &out);
+			EE_RTP(&inn, &out);
 			if(out.rhw < 0 || out.p.z > cam->cdepth * fZFogEnd) {
 				continue;
 			}
@@ -1568,10 +1285,10 @@ void ARX_PARTICLES_Render(EERIE_CAMERA * cam)  {
 				tv[0].rhw = out.rhw;
 				TexturedVertex temp;
 				temp.p = in.p + Vec3f(rnd() * 0.5f, 0.8f, rnd() * 0.5f);
-				EERIETreatPoint(&temp, &tv[1]);
+				EE_RTP(&temp, &tv[1]);
 				temp.p = in.p + vect * part->fparam;
 				
-				EERIETreatPoint(&temp, &tv[2]);
+				EE_RTP(&temp, &tv[2]);
 				GRenderer->ResetTexture(0);
 				
 				EERIEDRAWPRIM(Renderer::TriangleStrip, tv);
@@ -1741,14 +1458,8 @@ void RestoreAllLightsInitialStatus() {
 	}
 }
 
-extern long FRAME_COUNT;
-
 // Draws Flame Particles
 void TreatBackgroundActions() {
-	
-	if(FRAME_COUNT > 0) {
-		return;
-	}
 	
 	float fZFar = square(ACTIVECAM->cdepth * fZFogEnd * 1.3f);
 	
@@ -1759,7 +1470,7 @@ void TreatBackgroundActions() {
 			continue;
 		}
 		
-		float dist = distSqr(gl->pos,	ACTIVECAM->pos);
+		float dist = glm::distance2(gl->pos,	ACTIVECAM->orgTrans.pos);
 		if(dist > fZFar) {
 			// Out of treat range
 			ARX_SOUND_Stop(gl->sample);
@@ -1823,7 +1534,7 @@ void TreatBackgroundActions() {
 					pd->tc = (gl->extras & EXTRAS_SPAWNFIRE) ? fire2 : smokeparticle;
 					pd->special |= ROTATING | MODULATE_ROTATION;
 					pd->fparam = 0.1f - rnd() * 0.2f * gl->ex_speed;
-					pd->scale = Vec3f::repeat(-8.f);
+					pd->scale = Vec3f(-8.f);
 					pd->rgb = (gl->extras & EXTRAS_COLORLEGACY) ? gl->rgb : Color3f::white;
 				}
 			}
@@ -1838,7 +1549,7 @@ void TreatBackgroundActions() {
 					float t = rnd() * (PI * 2.f) - PI;
 					Vec3f s = Vec3f(EEsin(t), EEsin(t), EEcos(t)) * randomVec();
 					pd->ov = gl->pos + s * gl->ex_radius;
-					Vec3f vect = (pd->ov - gl->pos).getNormalized();
+					Vec3f vect = glm::normalize(pd->ov - gl->pos);
 					float d = (gl->extras & EXTRAS_FIREPLACE) ? 6.f : 4.f;
 					pd->move = Vec3f(vect.x * d, -10.f - 8.f * rnd(), vect.z * d) * gl->ex_speed;
 					pd->siz = 4.f * gl->ex_size * 0.3f;
@@ -1846,7 +1557,7 @@ void TreatBackgroundActions() {
 					pd->tc = fire2;
 					pd->special |= ROTATING | MODULATE_ROTATION | GRAVITY;
 					pd->fparam = 0.1f - rnd() * 0.2f * gl->ex_speed;
-					pd->scale = Vec3f::repeat(-3.f);
+					pd->scale = Vec3f(-3.f);
 					pd->rgb = (gl->extras & EXTRAS_COLORLEGACY) ? gl->rgb : Color3f::white;
 				}
 			}
@@ -1855,370 +1566,3 @@ void TreatBackgroundActions() {
 	}
 }
 
-void ARX_MAGICAL_FLARES_FirstInit() {
-	flarenum = 0;
-	for(long i = 0; i < MAX_FLARES; i++) {
-		flare[i].exist = 0; 
-	}
-}
-
-void ARX_MAGICAL_FLARES_KillAll()
-{
-	for (long i=0;i<MAX_FLARES;i++)
-	{
-		if (flare[i].exist)
-		{
-			if (flare[i].io)
-			{
-				flare[i].io->flarecount--;
-			}
-
-			flare[i].exist=0;
-			flare[i].tolive=0;
-			flarenum--;
-
-			if (ValidDynLight(flare[i].dynlight!=-1))
-				DynLight[flare[i].dynlight].exist=0;
-
-			flare[i].dynlight=-1;
-		}
-	}
-
-	flarenum=0;
-}
-
-void AddFlare(Vec2s * pos, float sm, short typ, Entity * io) {
-	
-	long i;
-	for(i = 0; i < MAX_FLARES; i++) {
-		if(!flare[i].exist) {
-			break;
-		}
-	}
-	if(i >= MAX_FLARES) {
-		return;
-	}
-	
-	FLARES * fl = &flare[i];
-	fl->exist = 1;
-	flarenum++;
-	
-	fl->bDrawBitmap = 0;
-	fl->io = io;
-	if(io) {
-		fl->flags = 1;
-		io->flarecount++;
-	} else {
-		fl->flags = 0;
-	}
-	
-	fl->x = pos->x - rnd() * 4.f;
-	fl->y = pos->y - rnd() * 4.f - 50.f;
-	fl->tv.rhw = fl->v.rhw = 1.f;
-	fl->tv.specular = fl->v.specular = 1;
-	
-	EERIE_CAMERA ka = *Kam;
-	ka.angle = Anglef(360.f, 360.f, 360.f) - ka.angle;
-	EERIE_CAMERA * oldcam = ACTIVECAM;
-	SetActiveCamera(&ka);
-	PrepareCamera(&ka);
-	fl->v.p += ka.pos;
-	EE_RTT(&fl->tv, &fl->v);
-	fl->v.p += ka.pos;
-	
-	float vx = -(fl->x - subj.center.x) * 0.2173913f;
-	float vy = (fl->y - subj.center.y) * 0.1515151515151515f;
-	if(io) {
-		fl->v.p.x = io->pos.x - EEsin(radians(MAKEANGLE(io->angle.b + vx))) * 100.f;
-		fl->v.p.y = io->pos.y + EEsin(radians(MAKEANGLE(io->angle.a + vy))) * 100.f - 150.f;
-		fl->v.p.z = io->pos.z + EEcos(radians(MAKEANGLE(io->angle.b + vx))) * 100.f;
-	} else {
-		fl->v.p.x = float(pos->x - (DANAESIZX / 2)) * 150.f / float(DANAESIZX);
-		fl->v.p.y = float(pos->y - (DANAESIZY / 2)) * 150.f / float(DANAESIZX);
-		fl->v.p.z = 75.f;
-		ka = *oldcam;
-		SetActiveCamera(&ka);
-		PrepareCamera(&ka);
-		float temp = (fl->v.p.y * -ka.Xsin) + (fl->v.p.z * ka.Xcos);
-		fl->v.p.y = (fl->v.p.y * ka.Xcos) - (-fl->v.p.z * ka.Xsin);
-		fl->v.p.z = (temp * ka.Ycos) - (-fl->v.p.x * ka.Ysin);
-		fl->v.p.x = (temp * -ka.Ysin) + (fl->v.p.x * ka.Ycos);	
-		fl->v.p += oldcam->pos;
-	}
-	fl->tv.p = fl->v.p;
-	SetActiveCamera(oldcam);
-	
-	switch(PIPOrgb) {
-		case 0: {
-			fl->rgb = Color3f(rnd() * (2.f/3) + .4f, rnd() * (2.f/3), rnd() * (2.f/3) + .4f);
-			break;
-		}
-		case 1: {
-			fl->rgb = Color3f(rnd() * .625f + .5f, rnd() * .625f + .5f, rnd() * .55f);
-			break;
-		}
-		case 2: {
-			fl->rgb = Color3f(rnd() * (2.f/3) + .4f, rnd() * .55f, rnd() * .55f);
-			break;
-		}
-	}
-	
-	if(typ == -1) {
-		float zz = (EERIEMouseButton & 1) ? 0.29f : ((sm > 0.5f) ? rnd() : 1.f);
-		if(zz < 0.2f) {
-			fl->type = 2;
-			fl->size = rnd() * 42.f + 42.f;
-			fl->tolive = (800.f + rnd() * 800.f) * FLARE_MUL;
-		} else if(zz < 0.5f) {
-			fl->type = 3;
-			fl->size = rnd() * 52.f + 16.f;
-			fl->tolive = (800.f + rnd() * 800.f) * FLARE_MUL;
-		} else {
-			fl->type = 1;
-			fl->size = (rnd() * 24.f + 32.f) * sm;
-			fl->tolive = (1700.f + rnd() * 500.f) * FLARE_MUL;
-		}
-	} else {
-		fl->type = (rnd() > 0.8f) ? 1 : 4;
-		fl->size = (rnd() * 38.f + 64.f) * sm;
-		fl->tolive = (1700.f + rnd() * 500.f) * FLARE_MUL;
-	}
-	
-	fl->dynlight = -1;
-	fl->move = OPIPOrgb;
-	
-	for(long kk = 0; kk < 3; kk++) {
-		
-		if(rnd() < 0.5f) {
-			continue;
-		}
-		
-		PARTICLE_DEF * pd = createParticle();
-		if(!pd) {
-			break;
-		}
-		
-		pd->special = FADE_IN_AND_OUT | ROTATING | MODULATE_ROTATION | DISSIPATING;
-		if(!io) {
-			pd->special |= PARTICLE_NOZBUFFER;
-		}
-		pd->ov = fl->v.p + randomVec(-5.f, 5.f);
-		pd->move = Vec3f(0.f, 5.f, 0.f);
-		pd->scale = Vec3f::repeat(-2.f);
-		pd->tolive = 1300 + kk * 100 + Random::get(0, 800);
-		pd->tc = fire2;
-		if(kk == 1) {
-			pd->move.y = 4.f;
-			pd->siz = 1.5f;
-		} else {
-			pd->siz = 1.f + rnd();
-		}
-		pd->rgb = Color3f(fl->rgb.r * (2.f/3), fl->rgb.g * (2.f/3), fl->rgb.b * (2.f/3));
-		pd->fparam = 1.2f;
-	}
-}
-
-void AddFlare2(Vec2s * pos, float sm, short typ, Entity * io) {
-	
-	long i;
-	for(i = 0; i < MAX_FLARES; i++) {
-		if(!flare[i].exist) {
-			break;
-		}
-	}
-	if(i >= MAX_FLARES) {
-		return;
-	}
-	
-	FLARES * fl = &flare[i];
-	fl->exist = 1;
-	flarenum++;
-	
-	fl->bDrawBitmap = 1;
-	fl->io = io;
-	if(io) {
-		fl->flags = 1;
-		io->flarecount++;
-	} else {
-		fl->flags = 0;
-	}
-	
-	fl->x = float(pos->x) - rnd() * 4.f;
-	fl->y = float(pos->y) - rnd() * 4.f - 50.f;
-	fl->tv.rhw = fl->v.rhw = 1.f;
-	fl->tv.specular = fl->v.specular = 1;
-	fl->tv.p = Vec3f(fl->x, fl->y, 0.001f);
-	switch(PIPOrgb)  {
-		case 0: {
-			fl->rgb = Color3f(rnd() * (2.f/3) + .4f, rnd() * (2.f/3), rnd() * (2.f/3) + .4f);
-			break;
-		}
-		case 1: {
-			fl->rgb = Color3f(rnd() * .625f + .5f, rnd() * .625f + .5f, rnd() * .55f);
-			break;
-		}
-		case 2: {
-			fl->rgb = Color3f(rnd() * (2.f/3) + .4f, rnd() * .55f, rnd() * .55f);
-			break;
-		}
-	}
-	
-	if(typ == -1) {
-		float zz = (EERIEMouseButton & 1) ? 0.29f : ((sm > 0.5f) ? rnd() : 1.f);
-		if(zz < 0.2f) {
-			fl->type = 2;
-			fl->size = rnd() * 42.f + 42.f;
-			fl->tolive = (800.f + rnd() * 800.f) * FLARE_MUL;
-		} else if(zz < 0.5f) {
-			fl->type = 3;
-			fl->size = rnd() * 52.f + 16.f;
-			fl->tolive = (800.f + rnd() * 800.f) * FLARE_MUL;
-		} else {
-			fl->type = 1;
-			fl->size = (rnd() * 24.f + 32.f) * sm;
-			fl->tolive = (1700.f + rnd() * 500.f) * FLARE_MUL;
-		}
-	} else {
-		fl->type = (rnd() > 0.8f) ? 1 : 4;
-		fl->size = (rnd() * 38.f + 64.f) * sm;
-		fl->tolive = (1700.f + rnd() * 500.f) * FLARE_MUL;
-	}
-	
-	fl->dynlight = -1;
-	fl->move = OPIPOrgb;
-	
-	for(long kk = 0; kk < 3; kk++) {
-		
-		if(rnd() < 0.5f) {
-			continue;
-		}
-		
-		PARTICLE_DEF * pd = createParticle();
-		if(!pd) {
-			break;
-		}
-		
-		pd->special = FADE_IN_AND_OUT;
-		pd->ov = fl->v.p + randomVec(-5.f, 5.f);
-		pd->move = Vec3f(0.f, 5.f, 0.f);
-		pd->scale = Vec3f::repeat(-2.f);
-		pd->tolive = 1300 + kk * 100 + Random::get(0, 800);
-		pd->tc = fire2;
-		if(kk == 1) {
-			pd->move.y = 4.f; 
-			pd->siz = 1.5f;
-		} else {
-			pd->siz = 1.f + rnd();
-		}
-		pd->rgb = Color3f(fl->rgb.r * (2.f/3), fl->rgb.g * (2.f/3), fl->rgb.b * (2.f/3));
-		pd->fparam = 1.2f;
-		pd->type = PARTICLE_2D;
-	}
-}
-
-//-----------------------------------------------------------------------------
-void AddLFlare(float x, float y,Entity * io) 
-{
-	Vec2s pos;
-	pos.x=(short)x;
-	pos.y=(short)y;
-	AddFlare(&pos,0.45f,1,io);	
-}
-
-//-----------------------------------------------------------------------------
-void FlareLine(Vec2s * pos0, Vec2s * pos1, Entity * io) 
-{
-	float dx,dy,adx,ady,m;
-	long i;
-	long z;
-	float x0=pos0->x;
-	float x1=pos1->x;
-	float y0=pos0->y;
-	float y1=pos1->y;
-	dx=(x1-x0);
-	adx=EEfabs(dx);
-	dy=(y1-y0);
-	ady=EEfabs(dy);
-
-	if (adx>ady) 
-	{
-		if (x0>x1) 
-		{
-			z = x1;
-			x1 = x0;
-			x0 = z;
-			z = y1;
-			y0 = z;
-		}
-
-		if (x0<x1) 
-		{
-			m=dy/dx;
-		
-			i = x0;
-
-			while(i<x1) 
-			{
-				z = rnd()*FLARELINERND;
-				z+=FLARELINESTEP;
-				i+=z;
-				y0+=m*z;
-				AddLFlare((float)i,y0,io);				
-			}
-		}
-		else 
-		{
-			m = dy / dx;
-			i = x1;
-
-			while(i<x0) 
-			{
-				z = rnd()*FLARELINERND;
-				z+=FLARELINESTEP;
-				i+=z;
-				y0+=m*z;
-				AddLFlare((float)i,y0,io);				
-			}
-		}				
-	}
-	else 
-	{
-		if (y0>y1) 
-		{
-			z = x1;
-			x0=z;
-			z = y1;
-			y1=y0;
-			y0=z;
-		}
-
-		if (y0<y1) 
-		{
-			m = dx/dy;
-			i = y0;
-
-			while(i<y1) 
-			{
-				z = rnd()*FLARELINERND;
-			    z+=FLARELINESTEP;
-				i+=z;
-				x0+=m*z;
-				AddLFlare(x0,(float)i,io);				
-			}			
-		} 
-		else 
-		{
-			m=dx/dy;
-			i = y1;
-
-			while(i<y0) 
-			{
-				z = rnd()*FLARELINERND;
-				z+=FLARELINESTEP;
-				i+=z;
-				x0+=m*z;
-				AddLFlare(x0,(float)i,io);				
-			} 
-		}	
-	}
-}

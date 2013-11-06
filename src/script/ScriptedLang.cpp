@@ -330,7 +330,7 @@ public:
 					GetItemWorldPosition(entities[l], &_pos);
 					GetItemWorldPosition(io, &_pos2);
 					
-					if(distSqr(_pos, _pos2) <= square(rad)) {
+					if(!fartherThan(_pos, _pos2, rad)) {
 						io->stat_sent++;
 						Stack_SendIOScriptEvent(entities[l], SM_NULL, params, event);
 					}
@@ -839,7 +839,7 @@ const string getName() {
 
 void timerCommand(const string & timer, Context & context) {
 	
-	// Checks if the timer is named by caller of if it needs a default name
+	// Checks if the timer is named by caller or if it needs a default name
 	string timername = timer.empty() ? ARX_SCRIPT_Timer_GetDefaultName() : timer;
 	
 	bool mili = false, idle = false;

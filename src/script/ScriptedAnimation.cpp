@@ -87,15 +87,11 @@ public:
 		
 		DebugScript(' ' << t1 << ' ' << t2 << ' ' << t3);
 		
-		io->angle.a += t1;
-		io->angle.b += t2;
-		io->angle.g += t3;
+		io->angle.setYaw(io->angle.getYaw() + t1);
+		io->angle.setPitch(io->angle.getPitch() + t2);
+		io->angle.setRoll(io->angle.getRoll() + t3);
 		
-		if((size_t)io->nb_lastanimvertex != io->obj->vertexlist.size()) {
-			free(io->lastanimvertex);
-			io->lastanimvertex = NULL;
-		}
-		io->lastanimtime = 0;
+		io->animBlend.lastanimtime = 0;
 		
 		return Success;
 	}
@@ -113,7 +109,7 @@ class ForceAnimCommand : public Command {
 		}
 		
 		FinishAnim(&io, io.animlayer[0].cur_anim);
-		io.lastmove = Vec3f::ZERO;
+		io.lastmove = Vec3f_ZERO;
 		ANIM_Set(&io.animlayer[0], ea);
 		io.animlayer[0].flags |= EA_FORCEPLAY;
 		io.animlayer[0].nextflags = 0;
@@ -162,7 +158,7 @@ public:
 		
 		DebugScript(' ' << angle);
 		
-		context.getEntity()->angle.b = angle;
+		context.getEntity()->angle.setPitch(angle);
 		
 		return Success;
 	}
@@ -220,7 +216,7 @@ public:
 			execute = test_flag(flg, 'e');
 			if(flg & flag('p')) {
 				iot = entities.player();
-				iot->move = iot->lastmove = Vec3f::ZERO;
+				iot->move = iot->lastmove = Vec3f_ZERO;
 			}
 		}
 		

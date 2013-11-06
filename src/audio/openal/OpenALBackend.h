@@ -24,14 +24,14 @@
 
 #include <al.h>
 #include <alc.h>
-#ifdef ARX_HAVE_OPENAL_EFX
+#if ARX_HAVE_OPENAL_EFX
 	#include <efx.h>
 #endif
 
 #include "audio/AudioBackend.h"
 #include "audio/AudioTypes.h"
 #include "audio/AudioResource.h"
-#include "math/MathFwd.h"
+#include "math/Types.h"
 
 namespace audio {
 
@@ -72,7 +72,7 @@ private:
 	ALCdevice * device;
 	ALCcontext * context;
 	
-#ifdef ARX_HAVE_OPENAL_EFX
+#if ARX_HAVE_OPENAL_EFX
 	
 	aalError setEffect(ALenum type, float val);
 	

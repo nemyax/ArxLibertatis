@@ -48,6 +48,8 @@ ZeniMax Media Inc., Suite 120, Rockville, Maryland 20850 USA.
 
 #include <algorithm>
 
+#include <glm/gtc/type_ptr.hpp>
+
 #include "graphics/GraphicsTypes.h"
 
 using std::min;
@@ -256,13 +258,14 @@ int tri_tri_intersect(const EERIE_TRI * VV, const EERIE_TRI * UU)
 	const float * U0;
 	const float * U1;
 	const float * U2;
-	V0 = VV->v[0].elem;
-	V1 = VV->v[1].elem;
-	V2 = VV->v[2].elem;
 
-	U0 = UU->v[0].elem;
-	U1 = UU->v[1].elem;
-	U2 = UU->v[2].elem;
+	V0 = glm::value_ptr(VV->v[0]);
+	V1 = glm::value_ptr(VV->v[1]);
+	V2 = glm::value_ptr(VV->v[2]);
+
+	U0 = glm::value_ptr(UU->v[0]);
+	U1 = glm::value_ptr(UU->v[1]);
+	U2 = glm::value_ptr(UU->v[2]);
 
 	/* compute plane equation of triangle(V0,V1,V2) */
 	SUB(E1, V1, V0);
@@ -399,7 +402,7 @@ bool Triangles_Intersect(const EERIE_TRI * v, const EERIE_TRI * u)
 }
 
 ///////////////////////////////////////////////////////////////////////////////////
-
+/*
 #define X 0
 #define Y 1
 #define Z 2
@@ -411,7 +414,7 @@ bool Triangles_Intersect(const EERIE_TRI * v, const EERIE_TRI * u)
 	if(x2<min) min=x2;\
 	else if(x2>max) max=x2;
 
-/*======================== X-tests ========================*/
+//======================== X-tests ========================
 #define AXISTEST_X01(a, b, fa, fb)			   \
 	p0 = a*v0[Y] - b*v0[Z];			       	   \
 	p2 = a*v2[Y] - b*v2[Z];			       	   \
@@ -426,7 +429,7 @@ bool Triangles_Intersect(const EERIE_TRI * v, const EERIE_TRI * u)
 	rad = fa * boxhalfsize[Y] + fb * boxhalfsize[Z];   \
 	if(min>rad || max<-rad) return 0;
 
-/*======================== Y-tests ========================*/
+//======================== Y-tests ========================
 #define AXISTEST_Y02(a, b, fa, fb)			   \
 	p0 = -a*v0[X] + b*v0[Z];		      	   \
 	p2 = -a*v2[X] + b*v2[Z];	       	       	   \
@@ -441,7 +444,7 @@ bool Triangles_Intersect(const EERIE_TRI * v, const EERIE_TRI * u)
 	rad = fa * boxhalfsize[X] + fb * boxhalfsize[Z];   \
 	if(min>rad || max<-rad) return 0;
 
-/*======================== Z-tests ========================*/
+//======================== Z-tests ========================
 
 #define AXISTEST_Z12(a, b, fa, fb)			   \
 	p1 = a*v1[X] - b*v1[Y];			           \
@@ -456,6 +459,12 @@ bool Triangles_Intersect(const EERIE_TRI * v, const EERIE_TRI * u)
 	if(p0<p1) {min=p0; max=p1;} else {min=p1; max=p0;} \
 	rad = fa * boxhalfsize[X] + fb * boxhalfsize[Y];   \
 	if(min>rad || max<-rad) return 0;
+
+
+#undef X
+#undef Y
+#undef Z
+*/
 
 //*******************************************************************************************
 //*******************************************************************************************
@@ -512,7 +521,7 @@ bool SphereInCylinder(const EERIE_CYLINDER * cyl1, const EERIE_SPHERE * s)
 //*************************************************************************************
 // Multiply Quaternion 'q1' by Quaternion 'q2', returns result in Quaternion 'dest'
 //*************************************************************************************
-void Quat_Multiply(EERIE_QUAT * dest, const EERIE_QUAT * q1, const EERIE_QUAT * q2)
+EERIE_QUAT Quat_Multiply(const EERIE_QUAT & q1, const EERIE_QUAT & q2)
 {
 	/*
 	Fast multiplication
@@ -542,10 +551,11 @@ void Quat_Multiply(EERIE_QUAT * dest, const EERIE_QUAT * q1, const EERIE_QUAT * 
 	additions/subtractions. Generally, this is still an improvement.
 	  */
 
-	dest->x = q1->w * q2->x + q1->x * q2->w + q1->y * q2->z - q1->z * q2->y;
-	dest->y = q1->w * q2->y + q1->y * q2->w + q1->z * q2->x - q1->x * q2->z;
-	dest->z = q1->w * q2->z + q1->z * q2->w + q1->x * q2->y - q1->y * q2->x;
-	dest->w = q1->w * q2->w - q1->x * q2->x - q1->y * q2->y - q1->z * q2->z;
+	return EERIE_QUAT(
+		q1.w * q2.x + q1.x * q2.w + q1.y * q2.z - q1.z * q2.y,
+		q1.w * q2.y + q1.y * q2.w + q1.z * q2.x - q1.x * q2.z,
+		q1.w * q2.z + q1.z * q2.w + q1.x * q2.y - q1.y * q2.x,
+		q1.w * q2.w - q1.x * q2.x - q1.y * q2.y - q1.z * q2.z);
 }
 
 //*************************************************************************************
@@ -563,8 +573,7 @@ void Quat_Divide(EERIE_QUAT * dest, const EERIE_QUAT * q1, const EERIE_QUAT * q2
 void TransformInverseVertexQuat(const EERIE_QUAT * quat, const Vec3f * vertexin,
                                 Vec3f * vertexout) {
 	
-	EERIE_QUAT rev_quat;
-	Quat_Copy(&rev_quat, quat);
+	EERIE_QUAT rev_quat = *quat;
 	Quat_Reverse(&rev_quat);
 	
 	float x = vertexin->x;
@@ -587,17 +596,17 @@ void TransformInverseVertexQuat(const EERIE_QUAT * quat, const Vec3f * vertexin,
 }
 
 
-void Quat_Slerp(EERIE_QUAT * result, const EERIE_QUAT * from, EERIE_QUAT * to, float ratio)
+EERIE_QUAT Quat_Slerp(const EERIE_QUAT & from, EERIE_QUAT to, float ratio)
 {
-	float fCosTheta = from->x * to->x + from->y * to->y + from->z * to->z + from->w * to->w;
+	float fCosTheta = from.x * to.x + from.y * to.y + from.z * to.z + from.w * to.w;
 
 	if (fCosTheta < 0.0f)
 	{
 		fCosTheta = -fCosTheta;
-		to->x = -to->x;
-		to->y = -to->y;
-		to->z = -to->z;
-		to->w = -to->w;
+		to.x = -to.x;
+		to.y = -to.y;
+		to.z = -to.z;
+		to.w = -to.w;
 	}
 
 	float fBeta = 1.f - ratio;
@@ -610,10 +619,11 @@ void Quat_Slerp(EERIE_QUAT * result, const EERIE_QUAT * from, EERIE_QUAT * to, f
 		ratio = EEsin(fTheta * ratio) * t ;
 	}
 
-	result->x = fBeta * from->x + ratio * to->x;
-	result->y = fBeta * from->y + ratio * to->y;
-	result->z = fBeta * from->z + ratio * to->z;
-	result->w = fBeta * from->w + ratio * to->w;
+	return EERIE_QUAT(
+		fBeta * from.x + ratio * to.x,
+		fBeta * from.y + ratio * to.y,
+		fBeta * from.z + ratio * to.z,
+		fBeta * from.w + ratio * to.w);
 }
 
 
@@ -626,8 +636,7 @@ void Quat_Reverse(EERIE_QUAT * q)
 	EERIE_QUAT qw, qr;
 	Quat_Init(&qw);
 	Quat_Divide(&qr, q, &qw);
-	Quat_Copy(q, &qr);
-
+	*q = qr;
 }
 
 
@@ -638,14 +647,14 @@ void QuatFromAngles(EERIE_QUAT * q, const Anglef * angle)
 
 {
 	float A, B;
-	A = angle->yaw * ( 1.0f / 2 );
-	B = angle->pitch * ( 1.0f / 2 );
+	A = angle->getYaw() * ( 1.0f / 2 );
+	B = angle->getPitch() * ( 1.0f / 2 );
 
 	float fSinYaw   = sinf(A);
 	float fCosYaw   = cosf(A);
 	float fSinPitch = sinf(B);
 	float fCosPitch = cosf(B);
-	A = angle->roll * ( 1.0f / 2 );
+	A = angle->getRoll() * ( 1.0f / 2 );
 	float fSinRoll  = sinf(A);
 	float fCosRoll  = cosf(A);
 	A = fCosRoll * fCosPitch;
@@ -656,6 +665,31 @@ void QuatFromAngles(EERIE_QUAT * q, const Anglef * angle)
 	q->w = A * fCosYaw + B * fSinYaw;
 
 }
+
+void worldAngleToQuat(EERIE_QUAT *dest, const Anglef & src, bool isNpc) {
+
+	if(!isNpc) {
+		// To correct invalid angle in Animated FIX/ITEMS
+		Anglef ang = src;
+		ang.setYaw(360 - ang.getYaw());
+		
+		EERIEMATRIX mat;
+		Vec3f vect(0, 0, 1);
+		Vec3f up(0, 1, 0);
+		VRotateY(&vect, ang.getPitch());
+		VRotateX(&vect, ang.getYaw());
+		VRotateZ(&vect, ang.getRoll());
+		VRotateY(&up, ang.getPitch());
+		VRotateX(&up, ang.getYaw());
+		VRotateZ(&up, ang.getRoll());
+		MatrixSetByVectors(&mat, &vect, &up);
+		QuatFromMatrix(*dest, mat);
+	} else {
+		Anglef vt1 = Anglef(radians(src.getYaw()), radians(src.getPitch()), radians(src.getRoll()));
+		QuatFromAngles(dest, &vt1);
+	}
+}
+
 
 //*************************************************************************************
 // Converts a unit quaternion into a rotation matrix.
@@ -838,25 +872,21 @@ void CalcObjFaceNormal(const Vec3f * v0, const Vec3f * v1, const Vec3f * v2,
 	Bz = v2->z - v0->z;
 	
 	ef->norm = Vec3f(Ay * Bz - Az * By, Az * Bx - Ax * Bz, Ax * By - Ay * Bx);
-	ef->norm.normalize();
-}
-
-void MatrixReset(EERIEMATRIX * mat) {
-	memset(mat, 0, sizeof(EERIEMATRIX));
+	ef->norm = glm::normalize(ef->norm);
 }
 
 void MatrixSetByVectors(EERIEMATRIX * m, const Vec3f * d, const Vec3f * u)
 {
 	float t;
 	Vec3f D, U, R;
-	D = d->getNormalized();
+	D = glm::normalize(*d);
 	U = *u;
 	t = U.x * D.x + U.y * D.y + U.z * D.z;
 	U.x -= D.x * t;
 	U.y -= D.y * t;
 	U.z -= D.y * t; // TODO is this really supposed to be D.y?
-	U.normalize();
-	R = cross(U, D);
+	U = glm::normalize(U);
+	R = glm::cross(U, D);
 	m->_11 = R.x;
 	m->_12 = R.y;
 	m->_21 = U.x;
@@ -872,7 +902,7 @@ void GenerateMatrixUsingVector(EERIEMATRIX * matrix, const Vec3f * vect, float r
 {
 	// Get our direction vector (the Z vector component of the matrix)
 	// and make sure it's normalized into a unit vector
-	Vec3f zAxis = vect->getNormalized();
+	Vec3f zAxis = glm::normalize(*vect);
 
 	// Build the Y vector of the matrix (handle the degenerate case
 	// in the way that 3DS does) -- This is not the true vector, only
@@ -885,16 +915,15 @@ void GenerateMatrixUsingVector(EERIEMATRIX * matrix, const Vec3f * vect, float r
 		yAxis = Vec3f(0.f, 1.f, 0.f);
 
 	// Build the X axis vector based on the two existing vectors
-	Vec3f xAxis = cross(yAxis, zAxis).getNormalized();
+	Vec3f xAxis = glm::normalize(glm::cross(yAxis, zAxis));
 
 	// Correct the Y reference vector
-	yAxis = cross(xAxis, zAxis).getNormalized();
+	yAxis = glm::normalize(glm::cross(xAxis, zAxis));
 	yAxis = -yAxis;
 
 	// Generate rotation matrix without roll included
-	EERIEMATRIX rot, roll;
-	MatrixReset(&rot);
-	MatrixReset(&roll);
+	EERIEMATRIX rot;
+	EERIEMATRIX roll;
 	rot._11 = yAxis.x;
 	rot._12 = yAxis.y;
 	rot._13 = yAxis.z;
@@ -947,7 +976,3 @@ void VectorMatrixMultiply(Vec3f * vDest, const Vec3f * vSrc, const EERIEMATRIX *
 	float z = vSrc->x * mat->_13 + vSrc->y * mat->_23 + vSrc->z * mat->_33 + mat->_43;
 	*vDest = Vec3f(x, y, z);
 }
-
-#undef X
-#undef Y
-#undef Z

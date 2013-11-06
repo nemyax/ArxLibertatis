@@ -19,36 +19,30 @@
 
 #include "crashreporter/ErrorReport.h"
 
-#ifdef ARX_HAVE_WINAPI
+#include "platform/Platform.h"
+
+#include <signal.h>
+
+#if ARX_PLATFORM == ARX_PLATFORM_WIN32
 // Win32
 #include <windows.h>
 #include <psapi.h>
-#else
-#include <sys/wait.h>
 #endif
 
-#ifdef ARX_HAVE_GETRUSAGE
+#if ARX_HAVE_GETRUSAGE
 #include <sys/resource.h>
 #include <sys/time.h>
 #endif
 
-#if defined(ARX_HAVE_PRCTL)
+#if ARX_HAVE_PRCTL
 #include <sys/prctl.h>
 #ifndef PR_SET_PTRACER
 #define PR_SET_PTRACER 0x59616d61
 #endif
 #endif
 
-#ifdef ARX_HAVE_SYSCONF
+#if ARX_HAVE_SYSCONF
 #include <unistd.h>
-#endif
-
-#ifdef ARX_HAVE_CRASHHANDLER_POSIX
-#include <signal.h>
-#endif
-
-#ifdef ARX_HAVE_SETENV
-#include <stdlib.h>
 #endif
 
 // Qt
@@ -81,6 +75,7 @@
 
 #include "platform/Architecture.h"
 #include "platform/OS.h"
+#include "platform/Process.h"
 
 ErrorReport::ErrorReport(const QString& sharedMemoryName)
 	: m_RunningTimeSec(0)
@@ -90,7 +85,7 @@ ErrorReport::ErrorReport(const QString& sharedMemoryName)
 	, m_Username("CrashBot")
 	, m_Password("WbAtVjS9")
 {
-#if defined(ARX_HAVE_PRCTL)
+#if ARX_HAVE_PRCTL && defined(DEBUG)
 	// Allow debuggers to be attached to this process, for development purpose...
 	prctl(PR_SET_PTRACER, 1, 0, 0, 0);
 #endif
@@ -134,7 +129,7 @@ bool ErrorReport::Initialize()
 
 bool ErrorReport::GetCrashDump(const fs::path & fileName) {
 	
-#ifdef ARX_HAVE_WINAPI
+#if ARX_PLATFORM == ARX_PLATFORM_WIN32
 	bool bHaveDump = false;
 
 	if(fs::exists(m_pCrashInfo->miniDumpTmpFile))
@@ -146,10 +141,10 @@ bool ErrorReport::GetCrashDump(const fs::path & fileName) {
 			bHaveDump = true;
 		}
 	}
-
+	
 	return bHaveDump;
 	
-#else // !ARX_HAVE_WINAPI
+#else //  ARX_PLATFORM != ARX_PLATFORM_WIN32
 	
 	ARX_UNUSED(fileName);
 	
@@ -158,10 +153,11 @@ bool ErrorReport::GetCrashDump(const fs::path & fileName) {
 	
 	return getCrashDescription();
 	
-#endif // !ARX_HAVE_WINAPI
+#endif
+	
 }
 
-#ifndef ARX_HAVE_WINAPI
+#if ARX_PLATFORM != ARX_PLATFORM_WIN32
 
 void getProcessSatus(QString filename, u64 & rss, u64 & startTicks) {
 	
@@ -194,7 +190,7 @@ void getResourceUsage(int pid, quint64 & memoryUsage, double & runningTimeSec) {
 	memoryUsage = 0;
 	runningTimeSec = 0.0;
 	
-#if defined(ARX_HAVE_GETRUSAGE) && ARX_PLATFORM != ARX_PLATFORM_MACOSX
+#if ARX_HAVE_GETRUSAGE && ARX_PLATFORM != ARX_PLATFORM_MACOSX
 	{
 		struct rusage usage;
 		if(getrusage(pid, &usage) == 0) {
@@ -203,7 +199,7 @@ void getResourceUsage(int pid, quint64 & memoryUsage, double & runningTimeSec) {
 	}
 #endif
 	
-#if defined(ARX_HAVE_SYSCONF) && (defined(_SC_PAGESIZE) || defined(_SC_CLK_TCK))
+#if ARX_HAVE_SYSCONF && (defined(_SC_PAGESIZE) || defined(_SC_CLK_TCK))
 	
 	u64 rss, startTicks, endTicks, dummy;
 	
@@ -248,15 +244,15 @@ void getResourceUsage(int pid, quint64 & memoryUsage, double & runningTimeSec) {
 	
 }
 
-#endif // !defined(ARX_HAVE_WINAPI)
+#endif //  ARX_PLATFORM != ARX_PLATFORM_WIN32
 
 bool ErrorReport::getCrashDescription() {
 	
-#ifdef ARX_HAVE_WINAPI
+#if ARX_PLATFORM == ARX_PLATFORM_WIN32
 	
 	return true;
 	
-#else // !defined(ARX_HAVE_WINAPI)
+#else // ARX_PLATFORM != ARX_PLATFORM_WIN32
 	
 	switch(m_pCrashInfo->signal) {
 		
@@ -376,48 +372,28 @@ bool ErrorReport::getCrashDescription() {
 	
 	m_ReportDescriptionText = m_ReportDescription;
 	
-#if defined(ARX_HAVE_FORK) && defined(ARX_HAVE_EXECLP) && defined(ARX_HAVE_DUP2)
-	
-	fs::path tracePath = m_ReportFolder / "gdbtrace.txt";
-	
-	// Fork so we retain control after launching GDB.
-	int childPID = fork();
-	if(childPID) {
-		// Wait for GDB to exit.
-		waitpid(childPID, NULL, 0);
-	} else {
-		
-		// Redirect output to a file
-		int fd = open(tracePath.string().c_str(), O_WRONLY|O_CREAT, 0666);
-		dup2(fd, 1);
-		close(fd);
-		
-		// Prepare pid argument for GDB.
-		char pid_buf[30];
-		memset(&pid_buf, 0, sizeof(pid_buf));
-		sprintf(pid_buf, "%d", m_pCrashInfo->processId);
-		
-		// Turn off localization for the backtrace output
-		#ifdef ARX_HAVE_SETENV
-		setenv("LANG", "C", 1);
-		setenv("LC_ALL", "C", 1);
-		#endif
-		
-		// Try to execute gdb to get a very detailed stack trace.
-		execlp("gdb", "gdb", "--batch", "-n", "-ex", "thread", "-ex", "set confirm off", "-ex", "set print frame-arguments all", "-ex", "set print static-members off", "-ex", "info threads", "-ex", "thread apply all bt full", m_pCrashInfo->execFullName, pid_buf, NULL);
-		
-		// GDB failed to start.
-		exit(1);
-	}
-#endif // defined(ARX_HAVE_EXECLP) && defined(ARX_HAVE_DUP2)
-	
-	bool bWroteDump = fs::exists(tracePath) && fs::file_size(tracePath) > 0;
-	if(!bWroteDump) {
-		m_DetailedError = "GDB is probably not installed on your machine. Please install it in order to obtain valuable crash reports in the future.";
+	// Get a stack trace via GDB
+	char pid_buf[36];
+	memset(&pid_buf, 0, sizeof(pid_buf));
+	sprintf(pid_buf, "--pid=%d", m_pCrashInfo->processId);
+	const char * args[] = {
+		"gdb", "--batch", "-n",
+		"-ex", "thread",
+		"-ex", "set confirm off",
+		"-ex", "set print frame-arguments all",
+		"-ex", "set print static-members off",
+		"-ex", "info threads",
+		"-ex", "thread apply all bt full",
+		pid_buf, NULL
+	};
+	std::string gdbstdout = platform::getOutputOf("gdb", args, /*unlocalized=*/ true);
+	if(gdbstdout.empty()) {
+		m_DetailedError = "GDB is probably not installed on your machine."
+		                  " Please install it in order to obtain valuable crash reports in the future.";
 		return false;
 	}
 	
-#ifdef ARX_HAVE_BACKTRACE
+#if ARX_HAVE_BACKTRACE
 	
 	boost::crc_32_type callstackCRC32;
 	
@@ -431,17 +407,9 @@ bool ErrorReport::getCrashDescription() {
 	u32 callstackCrc = callstackCRC32.checksum();
 	m_ReportUniqueID = QString("[%1]").arg(QString::number(callstackCrc, 16).toUpper());
 	
-#endif // ARX_HAVE_BACKTRACE
+#endif
 	
-	QFile traceFile(tracePath.string().c_str());
-	traceFile.open(QIODevice::ReadOnly);
-	if(!traceFile.isOpen()) {
-		m_DetailedError = "Unable to read GDB output from the disk.";
-		return false;
-	}
-	
-	QString traceStr = traceFile.readAll();
-	traceFile.close();
+	QString traceStr = QString::fromUtf8(gdbstdout.c_str());
 	QString callstackTop = "Unknown";
 	
 	// The useful stack frames are found below "<signal handler called>"
@@ -493,7 +461,7 @@ bool ErrorReport::getCrashDescription() {
 	
 	m_ReportTitle = QString("%1 %2").arg(m_ReportUniqueID, callstackTop.trimmed());
 	
-#endif // !defined(ARX_HAVE_WINAPI)
+#endif // ARX_PLATFORM != ARX_PLATFORM_WIN32
 	
 	return true;
 }
@@ -509,7 +477,7 @@ bool ErrorReport::GetMiscCrashInfo() {
 	m_OSArchitecture = QString::fromUtf8(platform::getOSArchitecture().c_str());
 	m_OSDistribution = QString::fromUtf8(platform::getOSDistribution().c_str());
 	
-#ifdef ARX_HAVE_WINAPI
+#if ARX_PLATFORM == ARX_PLATFORM_WIN32
 	
 	// Open parent process handle
 	HANDLE hProcess = OpenProcess(PROCESS_ALL_ACCESS, FALSE, m_pCrashInfo->processId);
@@ -585,11 +553,11 @@ bool ErrorReport::GetMiscCrashInfo() {
 	
 	m_ReportDescriptionText = m_ReportDescription;
 	
-#else // !ARX_HAVE_WINAPI
+#else // ARX_PLATFORM != ARX_PLATFORM_WIN32
 	
 	getResourceUsage(m_pCrashInfo->processId, m_ProcessMemoryUsage, m_RunningTimeSec);
 	
-#endif // !ARX_HAVE_WINAPI
+#endif
 
 	return true;
 }

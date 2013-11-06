@@ -52,7 +52,7 @@ ZeniMax Media Inc., Suite 120, Rockville, Maryland 20850 USA.
 
 #include "game/Entity.h"
 #include "game/Spells.h"
-#include "math/MathFwd.h"
+#include "math/Types.h"
 #include "platform/Flags.h"
 
 struct EERIE_3DOBJ;
@@ -134,9 +134,10 @@ struct ARXCHARACTER {
 	
 	Vec3f pos;
 	Anglef angle;
-	ANIM_USE useanim;
 	IO_PHYSICS physics;
 	
+	ANIM_USE bookAnimation[MAX_ANIM_LAYERS];
+
 	// Jump Sub-data
 	unsigned long jumpstarttime;
 	float jumplastposition;
@@ -161,6 +162,7 @@ struct ARXCHARACTER {
 	Entity * leftIO;
 	Entity * equipsecondaryIO;
 	Entity * equipshieldIO;
+	Entity * torch;
 	
 	short equiped[MAX_EQUIPED]; 
 	
@@ -270,6 +272,9 @@ struct ARXCHARACTER {
 	long gold;
 	short bag;
 	ARX_INTERFACE_MEMORIZE_SPELL SpellToMemorize;
+
+	float TRAP_DETECT;
+	float TRAP_SECRET;
 	
 	static float baseRadius() { return 52.f; }
 	static float baseHeight() { return -170.f; }
@@ -311,10 +316,9 @@ extern ANIM_HANDLE * herowait_2h;
 extern std::vector<STRUCT_QUEST> PlayerQuest;
 extern std::vector<KEYRING_SLOT> Keyring;
 
-extern float DeadCameraDistance;
-extern long BLOCK_PLAYER_CONTROLS;
-extern long USE_PLAYERCOLLISIONS;
-extern long WILLRETURNTOCOMBATMODE;
+extern bool BLOCK_PLAYER_CONTROLS;
+extern bool USE_PLAYERCOLLISIONS;
+extern bool WILLRETURNTOCOMBATMODE;
 
 void ARX_PLAYER_MakeSpHero();
 void ARX_PLAYER_LoadHeroAnimsAndMesh();
@@ -360,7 +364,6 @@ void ARX_PLAYER_Restore_Skin();
 float GetPlayerStealth();
 
 void ARX_GAME_Reset(long type = 0);
-void Manage_sp_max();
 long GetXPforLevel(long level);
 bool ARX_PLAYER_IsInFightMode();
 void ARX_PLAYER_Invulnerability(long flag);

@@ -50,7 +50,7 @@ ZeniMax Media Inc., Suite 120, Rockville, Maryland 20850 USA.
 #include <string>
 
 #include "game/Entity.h"
-#include "math/MathFwd.h"
+#include "math/Types.h"
 #include "platform/Flags.h"
 
 #define MAX_STACKED_BEHAVIOR 5
@@ -120,6 +120,16 @@ struct EERIE_EXTRA_ROTATE {
 	ExtraRotateFlags flags;
 	short group_number[MAX_EXTRA_ROTATE];
 	Anglef group_rotate[MAX_EXTRA_ROTATE];
+};
+
+struct EERIE_EXTRA_SCALE {
+	int groupIndex;
+	Vec3f scale;
+
+	EERIE_EXTRA_SCALE()
+		: groupIndex(-1)
+		, scale(Vec3f_ZERO)
+	{}
 };
 
 enum NPCFlag {

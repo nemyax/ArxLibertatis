@@ -47,45 +47,51 @@ ZeniMax Media Inc., Suite 120, Rockville, Maryland 20850 USA.
 #include <string>
 
 #include "core/Application.h"
+#include "graphics/Renderer.h"
 #include "window/Window.h"
 #include "window/RenderWindow.h"
 
 class Font;
 
-class ArxGame : public Application, public Window::Listener, public RenderWindow::RendererListener {
+class ArxGame : public Application, public Window::Listener, public Renderer::Listener {
 	
 protected:
 	
-	virtual bool Initialize();
-	virtual bool InitWindow();
-	virtual bool InitInput();
-	virtual bool InitSound();
-	bool InitGameData();
-	bool AddPaks();
+	virtual bool initialize();
+	virtual bool initWindow();
+	virtual bool initInput();
+	virtual bool initSound();
+	bool initGameData();
+	bool addPaks();
 	
-	void Render();
-	void FrameMove();
-	void ManageKeyMouse();
-	bool ManageEditorControls();
-	void ManagePlayerControls();
-	void DrawAllInterface();
-	void DrawAllInterfaceFinish();
-	void GoFor2DFX();
-	bool BeforeRun();
-	
-	void Render3DEnvironment();
-	
+	void doFrame();
+	void update();
+	void render();	
+
+	void manageKeyMouse();
+	void manageEditorControls();
+	void managePlayerControls();
+	void updateAllInterface();
+	void drawAllInterfac(); //TODO rename this
+	void drawAllInterface();
+	void drawAllInterfaceFinish();
+
+	void update2DFX();
+	void goFor2DFX();
+
+	bool beforeRun();
+		
 public:
 	
 	ArxGame();
 	virtual ~ArxGame();
 	
-	bool Create();
-	virtual void Run();
+	bool create();
+	virtual void run();
 
-	bool InitDeviceObjects();
-	bool FinalCleanup();
-	virtual void Cleanup3DEnvironment();
+	bool initDeviceObjects();
+	bool finalCleanup();
+	virtual void cleanup3DEnvironment();
 	
 	/*!
 	 * Writes text to the window
@@ -93,26 +99,44 @@ public:
 	 * @param y The y coordinate for the text
 	 * @param str The string of text to be written
 	 */
-	virtual void OutputText(int x, int y, const std::string & str);
-	virtual void OutputTextGrid(float x, float y, const std::string &text, const Color &color);
+	virtual void outputText(int x, int y, const std::string & str);
+	virtual void outputTextGrid(float x, float y, const std::string &text, const Color &color);
 	
 private:
+	void updateTime();
+	void updateInput();
+
+	// Camera stuff
+	void updateFirstPersonCamera();
+	void updateConversationCamera();
+	void speechControlledCinematic();
+	void handlePlayerDeath();
+	void handleCameraController();
+	void updateActiveCamera();
+
+	bool isInMenu() const;
+	bool isInCinematic() const;
+
+	void renderMenu();
+	void renderCinematic();
+
+	void updateLevel();
+	void renderLevel();
+
 	
 	virtual void onWindowGotFocus(const Window & window);
-	virtual void onWindowLostFocus(const Window & window);
 	virtual void onResizeWindow(const Window & window);
-	virtual void onPaintWindow(const Window & window);
 	virtual void onDestroyWindow(const Window & window);
 	virtual void onToggleFullscreen(const Window & window);
 	
 	bool wasResized;
 	
-	void onRendererInit(RenderWindow &);
-	void onRendererShutdown(RenderWindow &);
+	void onRendererInit(Renderer &);
+	void onRendererShutdown(Renderer &);
 	
 	bool initWindow(RenderWindow * window);
 	
-	void setFullscreen(bool fullscreen);
+	void setWindowSize(bool fullscreen);
 };
 
 #endif // ARX_CORE_ARXGAME_H

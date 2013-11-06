@@ -48,11 +48,12 @@ ZeniMax Media Inc., Suite 120, Rockville, Maryland 20850 USA.
 #define ARX_GRAPHICS_PARTICLE_PARTICLEEFFECTS_H
 
 #include <stddef.h>
+#include <vector>
 
 #include "graphics/Color.h"
 #include "graphics/Vertex.h"
-#include "math/MathFwd.h"
-#include "math/Vector3.h"
+#include "math/Types.h"
+#include "math/Vector.h"
 #include "math/Angle.h"
 
 struct EERIEPOLY;
@@ -61,25 +62,9 @@ struct EERIE_SPHERE;
 class TextureContainer;
 class Entity;
 
-struct FLARES {
-	unsigned char exist;
-	char type;
-	short flags;
-	TexturedVertex v;
-	TexturedVertex tv;
-	float x;
-	float y;
-	float tolive;
-	Color3f rgb;
-	float size;
-	long dynlight;
-	long move;
-	Entity * io;
-	bool bDrawBitmap;
-};
+
 
 struct POLYBOOM {
-	long exist;
 	short tx;
 	short tz;
 	EERIEPOLY * ep;
@@ -139,20 +124,11 @@ struct FOG_DEF
 	unsigned long lastupdate;
 };
 
-//-----------------------------------------------------------------------------
-struct FLARETC
-{
-	TextureContainer * lumignon;
-	TextureContainer * lumignon2;
-	TextureContainer * plasm;
-	TextureContainer * shine[11];
-};
-
 #define MAX_FOG 100
 #define FOG_DIRECTIONAL 1
 #define MAX_POLYBOOM 4000
 #define PARTICLE_2D	256
-#define MAX_FLARES 300
+
 #define MAX_FLARELIFE 4000
 #define FLARE_MUL 2.f
 
@@ -182,38 +158,28 @@ enum ARX_PARTICLES_TYPE_FLAG {
 //-----------------------------------------------------------------------------
 #define BOOM_RADIUS 420.f
 #define BOOM_RADIUS2 250.f
-#define MAX_OBJFX			30
-#define SPECIAL_RAYZ		1
-#define FLARELINESTEP		7
-#define FLARELINERND		6
 #define MAX_EXPLO			24 
 
 //-----------------------------------------------------------------------------
 extern TextureContainer * explo[MAX_EXPLO];
 extern TextureContainer * blood_splat;
-extern FLARES flare[MAX_FLARES];
-extern long flarenum;
+
 extern short OPIPOrgb;
 extern short PIPOrgb;
-extern long BoomCount;
-extern POLYBOOM polyboom[MAX_POLYBOOM];
+extern std::vector<POLYBOOM> polyboom;
 extern FOG_DEF fogs[MAX_FOG];
 extern TextureContainer * fire2;
 extern long NewSpell;
-extern FLARETC flaretc;
 
 void MagFX(const Vec3f & pos);
 void RestoreAllLightsInitialStatus();
 void TreatBackgroundActions();
 void TreatBackgroundDynlights();
 void MakeBookFX(const Vec3f & pos);
-void UpdateObjFx() ;
+
 void Add3DBoom(Vec3f * position);
 void AddRandomSmoke(Entity * io, long amount = 1);
-void AddFlare(Vec2s * pos, float sm, short typ, Entity * io = NULL);
-void AddFlare2(Vec2s * pos, float sm, short typ, Entity * io);
-void AddLFlare(float x, float y, Entity * io = NULL) ;
-void FlareLine(Vec2s * pos0, Vec2s * pos1, Entity * io = NULL);
+
 void LaunchDummyParticle();
 void ManageTorch();
 
@@ -240,9 +206,7 @@ void ARX_PARTICLES_SpawnWaterSplash(const Vec3f * pos);
 void ARX_BOOMS_ClearAllPolyBooms();
 void ARX_BOOMS_Add(Vec3f * pos, long type = 0);
 
-void ARX_MAGICAL_FLARES_FirstInit();
-void ARX_MAGICAL_FLARES_KillAll();
-void ARX_MAGICAL_FLARES_Draw(long FRAMETICKS);
+
 
 void LaunchFireballBoom(Vec3f * poss, float level, Vec3f * direction = NULL, Color3f * rgb = NULL);
 void SpawnFireballTail(Vec3f *, Vec3f *, float, long);

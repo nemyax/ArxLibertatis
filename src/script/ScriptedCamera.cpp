@@ -58,7 +58,6 @@ ZeniMax Media Inc., Suite 120, Rockville, Maryland 20850 USA.
 using std::string;
 
 extern Entity * CAMERACONTROLLER;
-extern long FRAME_COUNT;
 
 namespace script {
 
@@ -96,12 +95,9 @@ public:
 		DebugScript(' ' << target);
 		
 		if(target == "none") {
-			FRAME_COUNT = -1;
 			MasterCamera.exist = 0;
 			return Success;
 		}
-		
-		FRAME_COUNT = 0;
 		
 		Entity * t = entities.getById(target, context.getEntity());
 		
@@ -111,8 +107,6 @@ public:
 		
 		MasterCamera.exist |= 2;
 		MasterCamera.want_io = t;
-		MasterCamera.want_aup = t->usepath;
-		MasterCamera.want_cam = &t->_camdata->cam;
 		
 		return Success;
 	}

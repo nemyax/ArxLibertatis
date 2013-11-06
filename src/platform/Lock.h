@@ -21,24 +21,25 @@
 #define ARX_PLATFORM_LOCK_H
 
 #include "Configure.h"
+#include "platform/Platform.h"
 
-#if defined(ARX_HAVE_PTHREADS)
+#if ARX_HAVE_PTHREADS
 #include <pthread.h>
-#elif defined(ARX_HAVE_WINAPI)
+#elif ARX_PLATFORM == ARX_PLATFORM_WIN32
 #include <windows.h>
 #else
-#error "Locking not supported: need either ARX_HAVE_PTHREADS or ARX_HAVE_WINAPI"
+#error "Locking not supported: need ARX_HAVE_PTHREADS on non-Windows systems"
 #endif
 
 class Lock {
 	
 private:
 	
-#if defined(ARX_HAVE_PTHREADS)
+#if ARX_HAVE_PTHREADS
 	pthread_mutex_t mutex;
 	pthread_cond_t cond;
 	bool locked;
-#elif defined(ARX_HAVE_WINAPI)
+#elif ARX_PLATFORM == ARX_PLATFORM_WIN32
 	HANDLE mutex;
 #endif
 	

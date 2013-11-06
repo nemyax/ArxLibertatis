@@ -18,3 +18,35 @@
  */
 
 #include "game/Camera.h"
+
+#include <glm/gtx/euler_angles.hpp>
+#include <glm/gtx/transform.hpp>
+
+void EERIE_TRANSFORM::updateFromAngle(const Anglef &angle) {
+	float yaw, pitch, roll;
+	yaw = radians(angle.getYaw());
+	xcos = std::cos(yaw);
+	xsin = std::sin(yaw);
+	pitch = radians(angle.getPitch());
+	ycos = std::cos(pitch);
+	ysin = std::sin(pitch);
+	roll = radians(angle.getRoll());
+	zcos = std::cos(roll);
+	zsin = std::sin(roll);
+	
+	// 0.9.4.5 and older have a reversed sign in glm::eulerAngleY()
+#if GLM_VERSION_MAJOR == 0 \
+	&& (GLM_VERSION_MINOR < 9 || (GLM_VERSION_MINOR == 9 \
+		&& (GLM_VERSION_PATCH < 4 || (GLM_VERSION_PATCH == 4 \
+			&& GLM_VERSION_REVISION < 6 \
+		)) \
+	))
+	pitch = -pitch;
+#endif
+	
+	glm::mat4 translation = glm::translate(-pos);
+	glm::mat4 rotateX = glm::eulerAngleX(yaw);
+	glm::mat4 rotateY = glm::eulerAngleY(pitch);
+	glm::mat4 rotateZ = glm::eulerAngleZ(-roll);
+	worldToView = rotateZ * rotateX * rotateY * translation;
+}

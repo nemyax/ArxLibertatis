@@ -49,7 +49,7 @@ ZeniMax Media Inc., Suite 120, Rockville, Maryland 20850 USA.
 
 #include "graphics/Color.h"
 #include "graphics/Math.h"
-#include "math/MathFwd.h"
+#include "math/Types.h"
 
 struct TexturedVertex;
 
@@ -93,16 +93,14 @@ class CSpellFx
 		long			spellinstance;
 		virtual void	Update(unsigned long) { }
 		void			Update(float time);
-		virtual float	Render()
-		{
-			return 1;
-		};
+		virtual void	Render() {}
 };
 
 #define frand2() (1.0f - (2.0f * rnd()))
 
 void Draw3DLineTex2(Vec3f s, Vec3f e, float fSize, Color color, Color color2);
 void Draw3DLineTex(Vec3f, Vec3f, Color, float, float);
+void Draw3DLineTexNew(Vec3f startPos, Vec3f endPos, Color startColor, Color endColor, float startSize, float endSize);
 
 void Split(TexturedVertex * v, int a, int b, float fX, float fMulX, float fY, float fMulY, float fZ, float fMulZ);
 void Split(TexturedVertex * v, int a, int b, float yo, float fMul = 0.5f);

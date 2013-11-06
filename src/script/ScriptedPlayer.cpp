@@ -61,7 +61,6 @@ ZeniMax Media Inc., Suite 120, Rockville, Maryland 20850 USA.
 using std::string;
 
 extern float InventoryDir;
-extern Entity * CURRENT_TORCH;
 
 namespace script {
 
@@ -322,14 +321,14 @@ public:
 			if(BLOCK_PLAYER_CONTROLS) {
 				Stack_SendMsgToAllNPC_IO(SM_CONTROLS_ON, "");
 			}
-			BLOCK_PLAYER_CONTROLS = 0;
+			BLOCK_PLAYER_CONTROLS = false;
 		} else {
 			if(!BLOCK_PLAYER_CONTROLS) {
 				ARX_PLAYER_PutPlayerInNormalStance(0);
 				Stack_SendMsgToAllNPC_IO(SM_CONTROLS_OFF, "");
 				ARX_SPELLS_FizzleAllSpellsFromCaster(0);
 			}
-			BLOCK_PLAYER_CONTROLS = 1;
+			BLOCK_PLAYER_CONTROLS = true;
 			player.Interface &= ~INTER_COMBATMODE;
 		}
 		
@@ -416,7 +415,7 @@ public:
 			
 			DebugScript(" newspell");
 			
-			MakeBookFX(Vec3f(DANAESIZX - INTERFACE_RATIO(35), DANAESIZY - INTERFACE_RATIO(148),
+			MakeBookFX(Vec3f(g_size.width() - INTERFACE_RATIO(35), g_size.height() - INTERFACE_RATIO(148),
 			                 0.00001f));
 			
 		} else if(type == "torch") {
@@ -461,8 +460,8 @@ public:
 			
 		} else if(type == "torchoff") {
 			DebugScript(" torchoff");
-			if(CURRENT_TORCH) {
-				ARX_PLAYER_ClickedOnTorch(CURRENT_TORCH);
+			if(player.torch) {
+				ARX_PLAYER_ClickedOnTorch(player.torch);
 			}
 			
 		} else {

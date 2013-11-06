@@ -33,7 +33,7 @@
 #include "io/IniSection.h"
 #include "io/IniWriter.h"
 #include "io/log/Logger.h"
-#include "math/Vector2.h"
+#include "math/Vector.h"
 #include "platform/CrashHandler.h"
 
 using std::string;
@@ -54,11 +54,9 @@ const string
 	windowFramework = "auto",
 	windowSize = BOOST_PP_STRINGIZE(ARX_DEFAULT_WIDTH) "x"
 	             BOOST_PP_STRINGIZE(ARX_DEFAULT_HEIGHT),
-	inputBackend = "auto",
 	debugLevels = "";
 
 const int
-	bpp = 16,
 	levelOfDetail = 2,
 	fogDistance = 10,
 	volume = 10,
@@ -70,7 +68,6 @@ const int
 	quicksaveSlots = 3;
 
 const bool
-	first_run = true,
 	fullscreen = true,
 	showCrosshair = true,
 	antialiasing = true,
@@ -94,7 +91,7 @@ ActionKey actions[NUM_ACTION_KEY] = {
 	ActionKey(Keyboard::Key_Q), // LEANLEFT
 	ActionKey(Keyboard::Key_E), // LEANRIGHT
 	ActionKey(Keyboard::Key_X), // CROUCH
-	ActionKey(Keyboard::Key_F, Keyboard::Key_Enter), // MOUSELOOK
+	ActionKey(Keyboard::Key_F, Keyboard::Key_Enter), // USE
 	ActionKey(Mouse::Button_0), // ACTION
 	ActionKey(Keyboard::Key_I), // INVENTORY
 	ActionKey(Keyboard::Key_Backspace), // BOOK
@@ -149,7 +146,6 @@ const string language = "string";
 // Video options
 const string
 	resolution = "resolution",
-	bpp = "bpp",
 	fullscreen = "full_screen",
 	levelOfDetail = "others_details",
 	fogDistance = "fog",
@@ -178,8 +174,7 @@ const string
 	mouseLookToggle = "mouse_look_toggle",
 	mouseSensitivity = "mouse_sensitivity",
 	autoDescription = "auto_description",
-	linkMouseLookToUse = "link_mouse_look_to_use",
-	inputBackend = "backend";
+	linkMouseLookToUse = "link_mouse_look_to_use";
 
 // Input key options
 const string actions[NUM_ACTION_KEY] = {
@@ -193,7 +188,7 @@ const string actions[NUM_ACTION_KEY] = {
 	"lean_left",
 	"lean_right",
 	"crouch",
-	"mouselook",
+	"mouselook", // TODO rename to "use"?
 	"action_combine",
 	"inventory",
 	"book",
@@ -366,14 +361,13 @@ bool Config::save() {
 	
 	// video
 	writer.beginSection(Section::Video);
-	if(video.resolution == Vec2i::ZERO) {
+	if(video.resolution == Vec2i_ZERO) {
 		writer.writeKey(Key::resolution, Default::resolution);
 	} else {
 		std::ostringstream oss;
 		oss << video.resolution.x << 'x' << video.resolution.y;
 		writer.writeKey(Key::resolution, oss.str());
 	}
-	writer.writeKey(Key::bpp, video.bpp);
 	writer.writeKey(Key::fullscreen, video.fullscreen);
 	writer.writeKey(Key::levelOfDetail, video.levelOfDetail);
 	writer.writeKey(Key::fogDistance, video.fogDistance);
@@ -405,7 +399,6 @@ bool Config::save() {
 	writer.writeKey(Key::mouseSensitivity, input.mouseSensitivity);
 	writer.writeKey(Key::autoDescription, input.autoDescription);
 	writer.writeKey(Key::linkMouseLookToUse, input.linkMouseLookToUse);
-	writer.writeKey(Key::inputBackend, input.backend);
 	
 	// key
 	writer.beginSection(Section::Key);
@@ -458,11 +451,10 @@ bool Config::init(const fs::path & file) {
 	// Get video settings
 	string resolution = reader.getKey(Section::Video, Key::resolution, Default::resolution);
 	if(resolution == "auto") {
-		video.resolution = Vec2i::ZERO;
+		video.resolution = Vec2i_ZERO;
 	} else {
 		video.resolution = parseResolution(resolution);
 	}
-	video.bpp = reader.getKey(Section::Video, Key::bpp, Default::bpp);
 	video.fullscreen = reader.getKey(Section::Video, Key::fullscreen, Default::fullscreen);
 	video.levelOfDetail = reader.getKey(Section::Video, Key::levelOfDetail, Default::levelOfDetail);
 	video.fogDistance = reader.getKey(Section::Video, Key::fogDistance, Default::fogDistance);
@@ -490,7 +482,6 @@ bool Config::init(const fs::path & file) {
 	input.mouseSensitivity = reader.getKey(Section::Input, Key::mouseSensitivity, Default::mouseSensitivity);
 	input.autoDescription = reader.getKey(Section::Input, Key::autoDescription, Default::autoDescription);
 	input.linkMouseLookToUse = reader.getKey(Section::Input, Key::linkMouseLookToUse, Default::linkMouseLookToUse);
-	input.backend = reader.getKey(Section::Input, Key::inputBackend, Default::inputBackend);
 	
 	// Get action key settings
 	for(size_t i = 0; i < NUM_ACTION_KEY; i++) {

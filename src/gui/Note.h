@@ -24,8 +24,8 @@
 #include <string>
 #include <vector>
 
-#include <math/Vector2.h>
-#include <math/Rectangle.h>
+#include "math/Vector.h"
+#include "math/Rectangle.h"
 
 class TextureContainer;
 
@@ -42,7 +42,7 @@ struct Note {
 		QuestBook
 	};
 	
-	Note() : _type(Undefined), allocatedForRatio(Vec2f::ZERO), _page(0) { }
+	Note() : _type(Undefined), allocatedForRatio(Vec2f_ZERO), _page(0) { }
 	
 	void setData(Type type, const std::string & text);
 	void clear();

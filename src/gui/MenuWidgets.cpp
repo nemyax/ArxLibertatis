@@ -73,6 +73,7 @@ ZeniMax Media Inc., Suite 120, Rockville, Maryland 20850 USA.
 #include "gui/TextManager.h"
 
 #include "graphics/Draw.h"
+#include "graphics/DrawLine.h"
 #include "graphics/Math.h"
 #include "graphics/Renderer.h"
 #include "graphics/data/TextureContainer.h"
@@ -97,23 +98,18 @@ const std::string AUTO_RESOLUTION_STRING = "Automatic";
 
 static int newWidth;
 static int newHeight;
-static int newBpp;
 static bool newFullscreen;
 
 #define NODEBUGZONE
 
-//-----------------------------------------------------------------------------
-
 #define RATIO_X(a)    (((float)a)*Xratio)
 #define RATIO_Y(a)    (((float)a)*Yratio)
 
-
-//-----------------------------------------------------------------------------
 // Imported global variables and functions
 extern ARX_MENU_DATA ARXmenu;
 extern TextureContainer * scursor[];
-extern long DANAESIZX;
-extern long DANAESIZY;
+
+extern Rect g_size;
 
 extern long REFUSE_GAME_RETURN;
 
@@ -125,9 +121,7 @@ extern float PROGRESS_BAR_COUNT;
 float INTERFACE_RATIO(float a);
 bool bNoMenu=false;
 
-void ARXMenu_Private_Options_Video_SetResolution(bool fullscreen, int _iWidth, int _iHeight, int _bpp);
-
-//-----------------------------------------------------------------------------
+void ARXMenu_Private_Options_Video_SetResolution(bool fullscreen, int _iWidth, int _iHeight);
 
 static MenuCursor * pMenuCursor = NULL;
 
@@ -141,7 +135,6 @@ CMenuElementText *pDeleteConfirm=NULL;
 CMenuElementText *pDeleteButton=NULL;
 CMenuCheckButton * fullscreenCheckbox = NULL;
 static CMenuSliderText * pMenuSliderResol = NULL;
-static CMenuSliderText * pMenuSliderBpp = NULL;
 
 float ARXTimeMenu;
 float ARXOldTimeMenu;
@@ -174,27 +167,27 @@ void ARX_QuickSave() {
 
 void ARX_DrawAfterQuickLoad() {
 	
-	iTimeToDrawD7 -= checked_range_cast<int>(FrameDiff);
+	iTimeToDrawD7 -= checked_range_cast<int>(framedelay);
 	
 	float fColor;
 
-	if(iTimeToDrawD7>0)
-	{
+	if(iTimeToDrawD7 > 0) {
 		fColor=1.f;
-	}
-	else
-	{
+	} else {
 		int iFade=-iTimeToDrawD7;
 
-		if(iFade>1000) return;
+		if(iFade>1000)
+			return;
 
 		fColor=1.f-(((float)iFade)/1000.f);
 	}
 
 	TextureContainer *pTex = TextureContainer::Load("graph/interface/icons/menu_main_save");
 
-	if(!pTex) return;
+	if(!pTex)
+		return;
 
+	GRenderer->BeginScene();
 	GRenderer->SetRenderState(Renderer::AlphaBlending, true);
 	GRenderer->SetBlendFunc(Renderer::BlendOne, Renderer::BlendOne);
 
@@ -202,41 +195,58 @@ void ARX_DrawAfterQuickLoad() {
 	                 INTERFACE_RATIO_DWORD(pTex->m_dwHeight), 0.f, pTex, Color::gray(fColor));
 
 	GRenderer->SetRenderState(Renderer::AlphaBlending, false);
+	GRenderer->EndScene();
 }
 
-bool ARX_QuickLoad() {
-	
-	SaveGameList::iterator save = savegames.quickload();
-	if(save == savegames.end()) {
-		// No saves found!
-		return false;
-	}
-	
-	ARX_SOUND_MixerPause(ARX_SOUND_MixerGame);
+bool ARX_LoadGame(const SaveGame & save) {
 	
 	LoadLevelScreen();
 	PROGRESS_BAR_TOTAL = 238;
 	OLD_PROGRESS_BAR_COUNT = PROGRESS_BAR_COUNT = 0;
 	PROGRESS_BAR_COUNT += 1.f;
-	LoadLevelScreen(save->level);
+	LoadLevelScreen(save.level);
 	
 	DanaeClearLevel();
 	
-	ARX_CHANGELEVEL_Load(save->savefile);
+	long ret = ARX_CHANGELEVEL_Load(save.savefile);
 	
 	REFUSE_GAME_RETURN = 0;
-	ARX_SOUND_MixerResume(ARX_SOUND_MixerGame);
-	
-	return true;
+
+	return ret != -1;
 }
 
-//-----------------------------------------------------------------------------
+bool ARX_QuickLoad() {
+	bool loaded;
 
-bool MENU_NoActiveWindow()
-{
-	if( (!pWindowMenu)||
-		((pWindowMenu)&&
-		(pWindowMenu->eCurrentMenuState==MAIN)) ) return true;
+	SaveGameList::iterator save = savegames.quickload();
+	if(save == savegames.end()) {
+		// No saves found!
+		return false;
+	}
+
+	ARX_SOUND_MixerPause(ARX_SOUND_MixerGame);
+	loaded = ARX_LoadGame(*save);
+	ARX_SOUND_MixerResume(ARX_SOUND_MixerGame);
+	
+	return loaded;
+}
+
+bool ARX_SlotLoad(int slotIndex) {
+	if(slotIndex >= (int)savegames.size()) {
+		// Invalid slot!
+		return false;
+	}
+
+	ARX_SOUND_MixerPause(ARX_SOUND_MixerMenu);
+	return ARX_LoadGame(savegames[slotIndex]);
+}
+
+bool MENU_NoActiveWindow() {
+	if(!pWindowMenu
+	   || (pWindowMenu && pWindowMenu->eCurrentMenuState == MAIN)
+	) {
+		return true;
+	}
 
 	return false;
 }
@@ -249,21 +259,16 @@ void FontRenderText(Font* _pFont, Vec3f pos, const std::string& _pText, Color _c
 	}
 }
 
-void Check_Apply()
-{
-	if(pMenuElementApply)
-	{
-		if((config.video.resolution.x != newWidth) ||
-		   (config.video.resolution.y != newHeight) ||
-		   (config.video.fullscreen != newFullscreen) ||
-		   (config.video.bpp!=newBpp)) {
+void Check_Apply() {
+	if(pMenuElementApply) {
+		if(config.video.resolution.x != newWidth
+		   || config.video.resolution.y != newHeight
+		   || config.video.fullscreen != newFullscreen
+		) {
 			pMenuElementApply->SetCheckOn();
 			((CMenuElementText*)pMenuElementApply)->lColor=((CMenuElementText*)pMenuElementApply)->lOldColor;
-		}
-		else
-		{
-			if(((CMenuElementText*)pMenuElementApply)->lColor!=Color(127,127,127))
-			{
+		} else {
+			if(((CMenuElementText*)pMenuElementApply)->lColor != Color(127,127,127)) {
 				pMenuElementApply->SetCheckOff();
 				((CMenuElementText*)pMenuElementApply)->lOldColor=((CMenuElementText*)pMenuElementApply)->lColor;
 				((CMenuElementText*)pMenuElementApply)->lColor=Color(127,127,127);
@@ -272,10 +277,8 @@ void Check_Apply()
 	}
 }
 
-//-----------------------------------------------------------------------------
+static void FadeInOut(float _fVal) {
 
-static void FadeInOut(float _fVal)
-{
 	TexturedVertex d3dvertex[4];
 
 	u32 iColor = Color::gray(_fVal).toBGR();
@@ -285,28 +288,28 @@ static void FadeInOut(float _fVal)
 	d3dvertex[0].rhw=0.999999f;
 	d3dvertex[0].color=iColor;
 
-	d3dvertex[1].p.x=static_cast<float>(DANAESIZX);
+	d3dvertex[1].p.x=static_cast<float>(g_size.width());
 	d3dvertex[1].p.y=0;
 	d3dvertex[1].p.z=0.f;
 	d3dvertex[1].rhw=0.999999f;
 	d3dvertex[1].color=iColor;
 
 	d3dvertex[2].p.x=0;
-	d3dvertex[2].p.y=static_cast<float>(DANAESIZY);
+	d3dvertex[2].p.y=static_cast<float>(g_size.height());
 	d3dvertex[2].p.z=0.f;
 	d3dvertex[2].rhw=0.999999f;
 	d3dvertex[2].color=iColor;
 
-	d3dvertex[3].p.x=static_cast<float>(DANAESIZX);
-	d3dvertex[3].p.y=static_cast<float>(DANAESIZY);
+	d3dvertex[3].p.x=static_cast<float>(g_size.width());
+	d3dvertex[3].p.y=static_cast<float>(g_size.height());
 	d3dvertex[3].p.z=0.f;
 	d3dvertex[3].rhw=0.999999f;
 	d3dvertex[3].color=iColor;
 
 	GRenderer->ResetTexture(0);
-	GRenderer->SetRenderState(Renderer::AlphaBlending, true);
-
 	GRenderer->SetBlendFunc(Renderer::BlendZero, Renderer::BlendInvSrcColor);
+
+	GRenderer->SetRenderState(Renderer::AlphaBlending, true);
 	GRenderer->SetRenderState(Renderer::DepthWrite, false);
 	GRenderer->SetRenderState(Renderer::DepthTest, false);
 	GRenderer->SetCulling(Renderer::CullNone);
@@ -315,44 +318,59 @@ static void FadeInOut(float _fVal)
 
 	GRenderer->SetRenderState(Renderer::AlphaBlending, false);
 	GRenderer->SetRenderState(Renderer::DepthWrite, true);
-
 	GRenderer->SetRenderState(Renderer::DepthTest, true);
 	GRenderer->SetCulling(Renderer::CullCCW);
 }
 
-//-----------------------------------------------------------------------------
+bool ProcessFadeInOut(bool _bFadeIn, float _fspeed) {
 
-bool ProcessFadeInOut(bool _bFadeIn,float _fspeed)
-{
 	FadeInOut(fFadeInOut);
 
-	if(!bFade) return true;
+	if(!bFade)
+		return true;
 
-	if(_bFadeIn)
-	{
-		fFadeInOut+=_fspeed*ARXDiffTimeMenu*( 1.0f / 100 );
+	if(_bFadeIn) {
+		fFadeInOut += _fspeed * ARXDiffTimeMenu * (1.f/100);
 
-		if(fFadeInOut>1.f)
-		{
-			fFadeInOut=1.f;
-			bFade=false;
+		if(fFadeInOut > 1.f) {
+			fFadeInOut = 1.f;
+			bFade = false;
 		}
-	}
-	else
-	{
-		fFadeInOut-=_fspeed*ARXDiffTimeMenu*( 1.0f / 100 );
+	} else {
+		fFadeInOut -= _fspeed * ARXDiffTimeMenu * (1.f/100);
 
-		if(fFadeInOut<0.f)
-		{
-			fFadeInOut=0.f;
-			bFade=false;
+		if(fFadeInOut < 0.f) {
+			fFadeInOut = 0.f;
+			bFade = false;
 		}
 	}
 
 	return false;
 }
 
-//-----------------------------------------------------------------------------
+void MACRO_MENU_PRINCIPALE(int iPosMenuPrincipaleX,
+						   int & iPosMenuPrincipaleY,
+						   int iDecMenuPrincipaleY,
+						   Color lColor,
+						   int MACRO_button,
+						   MENUSTATE MACRO_menu,
+						   const char * MACRO_locate,
+						   int MACRO_check)
+{
+	std::string szMenuText = getLocalised( MACRO_locate );
+	CMenuElementText *me = new CMenuElementText(MACRO_button, hFontMainMenu, szMenuText, RATIO_X(iPosMenuPrincipaleX), RATIO_Y(iPosMenuPrincipaleY), lColor, 1.8f, MACRO_menu);
+	if(MACRO_check) {
+		pMenuElementResume=me;
+		if(ARXMenu_CanResumeGame()) {
+			me->SetCheckOn();
+		} else {
+			me->SetCheckOff();
+			me->lColor=Color(127,127,127);
+		}
+	}
+	pMenu->AddMenuElement(me);
+	iPosMenuPrincipaleY+=iDecMenuPrincipaleY;
+}
 
 bool Menu2_Render() {
 	
@@ -370,8 +388,8 @@ bool Menu2_Render() {
 		ARXDiffTimeMenu = 0;
 	}
 	
-	GRenderer->GetTextureStage(0)->SetMinFilter(TextureStage::FilterLinear);
-	GRenderer->GetTextureStage(0)->SetMagFilter(TextureStage::FilterLinear);
+	GRenderer->GetTextureStage(0)->setMinFilter(TextureStage::FilterLinear);
+	GRenderer->GetTextureStage(0)->setMagFilter(TextureStage::FilterLinear);
 	
 	if(AMCM_NEWQUEST == ARXmenu.currentmode || AMCM_CREDITS == ARXmenu.currentmode) {
 		
@@ -392,7 +410,7 @@ bool Menu2_Render() {
 		pTextManage->Clear();
 	}
 
-	GRenderer->GetTextureStage(0)->SetWrapMode(TextureStage::WrapClamp);
+	GRenderer->GetTextureStage(0)->setWrapMode(TextureStage::WrapClamp);
 
 	GRenderer->SetRenderState(Renderer::Fog, false);
 	GRenderer->SetRenderState(Renderer::DepthWrite, false);
@@ -402,21 +420,16 @@ bool Menu2_Render() {
 	MENUSTATE eOldMenuState=NOP;
 	MENUSTATE eM;
 
-	if(!pMenu)
-	{
-		eM=NOP;
-	}
-	else
-	{
-		eM=pMenu->eOldMenuWindowState;
+	if(!pMenu) {
+		eM = NOP;
+	} else {
+		eM = pMenu->eOldMenuWindowState;
 	}
 
 	Color lColor = Color(232, 204, 142);
 
-	if(    (!pMenu)|| ((pMenu)&&(pMenu->bReInitAll)) )
-	{
-		std::string szMenuText;
-		bool bBOOL = false;
+	if(!pMenu || (pMenu && pMenu->bReInitAll)) {
+
 		CMenuElementText *me;
 		
 		if(pMenu && pMenu->bReInitAll) {
@@ -430,43 +443,24 @@ bool Menu2_Render() {
 
 		pMenu->pTexBackGround = TextureContainer::LoadUI("graph/interface/menus/menu_main_background", TextureContainer::NoColorKey);
 
-		int iPosMenuPrincipaleX = 370;
-	int iPosMenuPrincipaleY=100;
-	int iDecMenuPrincipaleY=50;
-#define MACRO_MENU_PRINCIPALE(MACRO_button,MACRO_menu,MACRO_locate,MACRO_check){\
-		szMenuText = getLocalised( MACRO_locate );\
-		me = new CMenuElementText(MACRO_button, hFontMainMenu, szMenuText, RATIO_X(iPosMenuPrincipaleX), RATIO_Y(iPosMenuPrincipaleY), lColor, 1.8f, MACRO_menu);\
-		if(MACRO_check)\
-		{\
-			pMenuElementResume=me;\
-			ARXMenu_GetResumeGame(bBOOL);\
-			if (bBOOL)\
-			{\
-				me->SetCheckOn();\
-			}\
-			else\
-			{\
-				me->SetCheckOff();\
-				me->lColor=Color(127,127,127);\
-			}\
-		}\
-		pMenu->AddMenuElement(me);\
-		iPosMenuPrincipaleY+=iDecMenuPrincipaleY;\
-	}
+		int mainPosX = 370;
+		int mainPosY = 100;
+		int mainDecY = 50;
 
-	MACRO_MENU_PRINCIPALE(BUTTON_MENUMAIN_RESUMEGAME,RESUME_GAME,"system_menus_main_resumegame",1);
-	MACRO_MENU_PRINCIPALE(BUTTON_MENUMAIN_NEWQUEST,NEW_QUEST,"system_menus_main_newquest",0);
-	MACRO_MENU_PRINCIPALE(-1,EDIT_QUEST,"system_menus_main_editquest",0);
-	MACRO_MENU_PRINCIPALE(BUTTON_MENUMAIN_OPTIONS,OPTIONS,"system_menus_main_options",0);
-	MACRO_MENU_PRINCIPALE(BUTTON_MENUMAIN_CREDITS,CREDITS,"system_menus_main_credits",0);
-	MACRO_MENU_PRINCIPALE(-1,QUIT,"system_menus_main_quit",0);
-#undef MACRO_MENU_PRINCIPALE
+	MACRO_MENU_PRINCIPALE(mainPosX, mainPosY, mainDecY, lColor, BUTTON_MENUMAIN_RESUMEGAME,RESUME_GAME,"system_menus_main_resumegame",1);
+	MACRO_MENU_PRINCIPALE(mainPosX, mainPosY, mainDecY, lColor, BUTTON_MENUMAIN_NEWQUEST,NEW_QUEST,"system_menus_main_newquest",0);
+	MACRO_MENU_PRINCIPALE(mainPosX, mainPosY, mainDecY, lColor, -1,EDIT_QUEST,"system_menus_main_editquest",0);
+	MACRO_MENU_PRINCIPALE(mainPosX, mainPosY, mainDecY, lColor, BUTTON_MENUMAIN_OPTIONS,OPTIONS,"system_menus_main_options",0);
+	MACRO_MENU_PRINCIPALE(mainPosX, mainPosY, mainDecY, lColor, BUTTON_MENUMAIN_CREDITS,CREDITS,"system_menus_main_credits",0);
+	MACRO_MENU_PRINCIPALE(mainPosX, mainPosY, mainDecY, lColor, -1,QUIT,"system_menus_main_quit",0);
+
 		std::string version = arx_version;
 		if(!arx_release_codename.empty()) {
 			version += " \"";
 			version += arx_release_codename;
 			version += "\"";
 		}
+
 		float verPosX = RATIO_X(620) - hFontControls->getTextSize(version).x;
 		me = new CMenuElementText( -1, hFontControls, version, verPosX, RATIO_Y(80), lColor, 1.0f, NOP );
 		
@@ -477,18 +471,12 @@ bool Menu2_Render() {
 
 	bool bScroll=true;
 	{
-		if(pMenuElementResume)
-		{
-			bool bTemp;
-			ARXMenu_GetResumeGame(bTemp);
+		if(pMenuElementResume) {
 
-			if(bTemp)
-			{
+			if(ARXMenu_CanResumeGame()) {
 				pMenuElementResume->SetCheckOn();
 				((CMenuElementText*)pMenuElementResume)->lColor=lColor;
-			}
-			else
-			{
+			} else {
 				pMenuElementResume->SetCheckOff();
 				((CMenuElementText*)pMenuElementResume)->lColor=Color(127,127,127);
 			}
@@ -496,14 +484,12 @@ bool Menu2_Render() {
 
 		MENUSTATE eMenuState = pMenu->Update(checked_range_cast<int>(ARXDiffTimeMenu));
 
-		if(eOldMenuState!=NOP)
-		{
+		if(eOldMenuState != NOP) {
 			eMenuState=eOldMenuState;
 			bScroll=false;
 		}
 
-		if( eMenuState == RESUME_GAME )
-		{
+		if(eMenuState == RESUME_GAME) {
 			pTextManage->Clear();
 			ARXmenu.currentmode = AMCM_OFF;
 			pMenu->eMenuState = NOP;
@@ -513,28 +499,26 @@ bool Menu2_Render() {
 			delete pMenu, pMenu = NULL;
 			
 			GRenderer->SetRenderState(Renderer::AlphaBlending, false);
-			GRenderer->GetTextureStage(0)->SetWrapMode(TextureStage::WrapRepeat);
+			GRenderer->GetTextureStage(0)->setWrapMode(TextureStage::WrapRepeat);
 			GRenderer->SetRenderState(Renderer::DepthWrite, true);
 			GRenderer->SetRenderState(Renderer::DepthTest, true);
 			GRenderer->EndScene();
 
 			return true;
-		}
-		else if (eMenuState!=NOP )
-		{
+		} else if(eMenuState != NOP) {
 			pMenu->eOldMenuState=eMenuState;
 			
 			delete pWindowMenu, pWindowMenu = NULL;
 			
 			//suivant la resolution
-			int iWindowMenuWidth=(321);
-			int iWindowMenuHeight=(430);
-			int iWindowMenuPosX=(20);
-			int iWindowMenuPosY=(480-iWindowMenuHeight)>>1;
-			int    iWindowConsoleOffsetX=(0);
-			int    iWindowConsoleOffsetY=(14-10);
-			int    iWindowConsoleWidth=(iWindowMenuWidth-iWindowConsoleOffsetX);
-			int    iWindowConsoleHeight=(iWindowMenuHeight-iWindowConsoleOffsetY+20);
+			int iWindowMenuWidth = (321);
+			int iWindowMenuHeight = (430);
+			int iWindowMenuPosX = (20);
+			int iWindowMenuPosY = (480-iWindowMenuHeight)>>1;
+			int iWindowConsoleOffsetX = (0);
+			int iWindowConsoleOffsetY = (14-10);
+			int iWindowConsoleWidth = (iWindowMenuWidth-iWindowConsoleOffsetX);
+			int iWindowConsoleHeight = (iWindowMenuHeight-iWindowConsoleOffsetY+20);
 			///////////////////////
 
 			float fPosX1 = RATIO_X(20);
@@ -542,49 +526,42 @@ bool Menu2_Render() {
 
 			int iPosX2 = checked_range_cast<int>(fPosX2);
 
-			float fPosBack      = RATIO_X(10);
-			float fPosBackY      = RATIO_Y(190);
-			float fPosNext      = RATIO_X(140);
+			float fPosBack  = RATIO_X(10);
+			float fPosBackY = RATIO_Y(190);
+			float fPosNext  = RATIO_X(140);
 
-			float fPosApply   = RATIO_X(240);
+			float fPosApply = RATIO_X(240);
 
-			float fPosBDAY      = RATIO_Y(380);
+			float fPosBDAY  = RATIO_Y(380);
 
 			pWindowMenu = new CWindowMenu(iWindowMenuPosX,iWindowMenuPosY,iWindowMenuWidth,iWindowMenuHeight,1);
 
-			switch(eMenuState)
-			{
-			//------------------ START NEW_QUEST
-			case NEW_QUEST:
-				{
+			switch(eMenuState) {
+			case NEW_QUEST: {
 					std::string szMenuText;
-					bool bBOOL = false;
-					ARXMenu_GetResumeGame(bBOOL);
 
-					if (!bBOOL)
-					{
+					if(!ARXMenu_CanResumeGame())
 						break;
-					}
 
 					CMenuElement *me = NULL;
 					CWindowMenuConsole *pWindowMenuConsole=new CWindowMenuConsole(iWindowConsoleOffsetX,iWindowConsoleOffsetY,iWindowConsoleWidth,iWindowConsoleHeight,NEW_QUEST);
-					szMenuText = getLocalised( "system_menus_main_editquest_confirm" );
+					szMenuText = getLocalised("system_menus_main_editquest_confirm");
 					me=new CMenuElementText(-1, hFontMenu, szMenuText,0,0,lColor,1.f, NOP);
 					me->bCheck = false;
 					pWindowMenuConsole->AddMenuCenter(me);
 
-					szMenuText = getLocalised( "system_menus_main_newquest_confirm" );
+					szMenuText = getLocalised("system_menus_main_newquest_confirm");
 					me=new CMenuElementText(-1, hFontMenu, szMenuText,0,0,lColor,1.f, NOP);
 					me->bCheck = false;
 					pWindowMenuConsole->AddMenuCenter(me);
 
 					CMenuPanel *pPanel = new CMenuPanel();
-					szMenuText = getLocalised( "system_yes" );
+					szMenuText = getLocalised("system_yes");
 					szMenuText += "   "; // TODO This space can probably go
 					me = new CMenuElementText(BUTTON_MENUNEWQUEST_CONFIRM, hFontMenu, szMenuText, 0, 0,lColor,1.f, NEW_QUEST_ENTER_GAME);
 					me->SetPos(RATIO_X(iWindowConsoleWidth - (me->GetWidth() + 10)),0);
 					pPanel->AddElementNoCenterIn(me);
-					szMenuText = getLocalised( "system_no" );
+					szMenuText = getLocalised("system_no");
 					me = new CMenuElementText(-1, hFontMenu, szMenuText, fPosBack, 0,lColor,1.f, MAIN);
 					me->SetShortCut(Keyboard::Key_Escape);
 					pPanel->AddElementNoCenterIn(me);
@@ -595,11 +572,9 @@ bool Menu2_Render() {
 					pWindowMenu->AddConsole(pWindowMenuConsole);
 					pWindowMenu->eCurrentMenuState=NEW_QUEST;
 
-					}
 				break;
-			//------------------ END NEW_QUEST
-			case EDIT_QUEST:
-				{
+			}
+			case EDIT_QUEST: {
 					CMenuElement *me;
 					CMenuElement *me01;
 					CMenuPanel *pPanel;
@@ -614,11 +589,8 @@ bool Menu2_Render() {
 
 					szMenuText = getLocalised( "system_menus_main_editquest_save");
 					me = new CMenuElementText(-1, hFontMenu, szMenuText, 0, 0, lColor, 1.f, EDIT_QUEST_SAVE);
-					bool bBOOL;
-					ARXMenu_GetResumeGame(bBOOL);
-
-					if (!bBOOL)
-					{
+					
+					if(!ARXMenu_CanResumeGame()) {
 						me->SetCheckOff();
 						((CMenuElementText*)me)->lColor=Color(127,127,127);
 					}
@@ -650,7 +622,6 @@ bool Menu2_Render() {
 					// TODO align the date part to the right!
 					
 					{
-						
 						size_t quicksaveNum = 0;
 						
 						// Show quicksaves.
@@ -846,8 +817,7 @@ bool Menu2_Render() {
 					pWindowMenu->AddConsole(pWindowMenuConsole);
 					}
 				break;
-			case OPTIONS:
-				{
+			case OPTIONS: {
 					std::string szMenuText;
 					CMenuElement *me;
 					CMenuPanel *pc;
@@ -893,15 +863,9 @@ bool Menu2_Render() {
 						
 						slider->AddText(new CMenuElementText(-1, hFontMenu, "Auto-Select", 0, 0, lColor, 1.f, OPTIONS_VIDEO_RENDERER_AUTOMATIC));
 						slider->iPos = slider->vText.size() - 1;
-#ifdef ARX_HAVE_SDL
+#if ARX_HAVE_SDL1 || ARX_HAVE_SDL2
 						slider->AddText(new CMenuElementText(-1, hFontMenu, "OpenGL", 0, 0, lColor, 1.f, OPTIONS_VIDEO_RENDERER_OPENGL));
 						if(config.window.framework == "SDL") {
-							slider->iPos = slider->vText.size() - 1;
-						}
-#endif
-#ifdef ARX_HAVE_D3D9
-						slider->AddText(new CMenuElementText(-1, hFontMenu, "D3D 9", 0, 0, lColor, 1.f, OPTIONS_VIDEO_RENDERER_D3D9));
-						if(config.window.framework == "D3D9") {
 							slider->iPos = slider->vText.size() - 1;
 						}
 #endif
@@ -942,20 +906,10 @@ bool Menu2_Render() {
 					
 					pMenuSliderResol->setEnabled(config.video.fullscreen);
 					
-					std::vector<unsigned> vBpp;
-					
-					const RenderWindow::DisplayModes & modes = mainApp->GetWindow()->getDisplayModes();
+					const RenderWindow::DisplayModes & modes = mainApp->getWindow()->getDisplayModes();
 					for(size_t i = 0; i != modes.size(); ++i) {
 						
-						const RenderWindow::DisplayMode & mode = modes[i];
-						
-						if(std::find(vBpp.begin(), vBpp.end(), mode.depth) == vBpp.end()) {
-							vBpp.push_back(mode.depth);
-						}
-						
-						if(mode.depth != unsigned(config.video.bpp)) {
-							continue;
-						}
+						const DisplayMode & mode = modes[i];
 						
 						// find the aspect ratio
 						unsigned a = mode.resolution.x;
@@ -964,10 +918,10 @@ bool Menu2_Render() {
 							unsigned t = a % b;
 							a = b, b = t;
 						}
-						Vec2i aspect = mode.resolution / a;
+						Vec2i aspect = mode.resolution / Vec2i(a);
 						
 						std::stringstream ss;
-						ss << mode.resolution.x << 'x' << mode.resolution.y;
+						ss << mode;
 						
 						if(aspect.x < 100 && aspect.y < 100) {
 							if(aspect == Vec2i(8, 5)) {
@@ -985,7 +939,7 @@ bool Menu2_Render() {
 					
 					pMenuSliderResol->AddText(new CMenuElementText(-1, hFontMenu, AUTO_RESOLUTION_STRING, 0, 0, lColor, 1.f, MENUSTATE(OPTIONS_VIDEO_RESOLUTION_0 + modes.size())));
 					
-					if(config.video.resolution == Vec2i::ZERO) {
+					if(config.video.resolution == Vec2i_ZERO) {
 						pMenuSliderResol->iPos = pMenuSliderResol->vText.size() - 1;
 					}
 
@@ -996,42 +950,6 @@ bool Menu2_Render() {
 
 					pc->AddElement(pMenuSliderResol);
 
-					pWindowMenuConsole->AddMenuCenterY(pc);
-
-					int iSize = me->GetWidth();
-					pc = new CMenuPanel();
-					szMenuText = getLocalised("system_menus_options_video_bpp");
-					szMenuText += " ";
-					me = new CMenuElementText(-1, hFontMenu, szMenuText, fPosX1, 0.f, lColor, 1.f, NOP);
-					me->SetCheckOff();
-					pc->AddElement(me);
-					me = new CMenuSliderText(BUTTON_MENUOPTIONSVIDEO_BPP, 0, 0);
-					pMenuSliderBpp = (CMenuSliderText*)me;
-					pMenuSliderBpp->setEnabled(config.video.fullscreen);
-
-					
-					std::sort(vBpp.begin(), vBpp.end());
-
-					std::vector<unsigned>::iterator ii;
-					for(ii=vBpp.begin();ii!=vBpp.end();++ii)
-					{
-						std::stringstream bpp;
-						bpp << *ii;
-						((CMenuSliderText*)me)->AddText(new CMenuElementText(-1, hFontMenu, bpp.str(), 0, 0, lColor, 1.f, (MENUSTATE)(BUTTON_MENUOPTIONSVIDEO_BPP)));
-
-						if(*ii == unsigned(config.video.bpp)) {
-							((CMenuSliderText*)me)->iPos = ((CMenuSliderText*)me)->vText.size()-1;
-						}
-					}
-
-					((CMenuSliderText *)me)->SetWidth(iSize);
-
-
-					fRatio    = (RATIO_X(iWindowConsoleWidth-9) - me->GetWidth()); 
-					me->Move(checked_range_cast<int>(fRatio), 0); 
-
-
-					pc->AddElement(me);
 					pWindowMenuConsole->AddMenuCenterY(pc);
 
 					pc = new CMenuPanel();
@@ -1137,15 +1055,9 @@ bool Menu2_Render() {
 						
 						slider->AddText(new CMenuElementText(-1, hFontMenu, "Auto-Select", 0, 0, lColor, 1.f, OPTIONS_AUDIO_BACKEND_AUTOMATIC));
 						slider->iPos = slider->vText.size() - 1;
-#ifdef ARX_HAVE_OPENAL
+#if ARX_HAVE_OPENAL
 						slider->AddText(new CMenuElementText(-1, hFontMenu, "OpenAL", 0, 0, lColor, 1.f, OPTIONS_AUDIO_BACKEND_OPENAL));
 						if(config.audio.backend == "OpenAL") {
-							slider->iPos = slider->vText.size() - 1;
-						}
-#endif
-#ifdef ARX_HAVE_DSOUND
-						slider->AddText(new CMenuElementText(-1, hFontMenu, "Direct Sound", 0, 0, lColor, 1.f, OPTIONS_AUDIO_BACKEND_DSOUND));
-						if(config.audio.backend == "DirectSound") {
 							slider->iPos = slider->vText.size() - 1;
 						}
 #endif
@@ -1219,39 +1131,6 @@ bool Menu2_Render() {
 					//------------------ START INPUT
 					pWindowMenuConsole = new CWindowMenuConsole(iWindowConsoleOffsetX,iWindowConsoleOffsetY,iWindowConsoleWidth,iWindowConsoleHeight, OPTIONS_INPUT);
 					
-					// Input backend selection
-					{
-						
-						pc = new CMenuPanel();
-						szMenuText = getLocalised("system_menus_options_input_backend", "Backend");
-						szMenuText += "  ";
-						me = new CMenuElementText(-1, hFontMenu, szMenuText, fPosX1, 0.f, lColor, 1.f, NOP);
-						me->SetCheckOff();
-						pc->AddElement(me);
-						CMenuSliderText * slider = new CMenuSliderText(BUTTON_MENUOPTIONS_CONTROLS_BACKEND, 0, 0);
-						
-						slider->AddText(new CMenuElementText(-1, hFontMenu, "Auto-Select", 0, 0, lColor, 1.f, OPTIONS_INPUT_BACKEND_AUTOMATIC));
-						slider->iPos = slider->vText.size() - 1;
-#ifdef ARX_HAVE_SDL
-						slider->AddText(new CMenuElementText(-1, hFontMenu, "SDL", 0, 0, lColor, 1.f, OPTIONS_INPUT_BACKEND_SDL));
-						if(config.input.backend == "SDL") {
-							slider->iPos = slider->vText.size() - 1;
-						}
-#endif
-#ifdef ARX_HAVE_DINPUT8
-						slider->AddText(new CMenuElementText(-1, hFontMenu, "DInput 8", 0, 0, lColor, 1.f, OPTIONS_INPUT_BACKEND_DINPUT));
-						if(config.input.backend == "DirectInput8") {
-							slider->iPos = slider->vText.size() - 1;
-						}
-#endif
-						
-						float fRatio    = (RATIO_X(iWindowConsoleWidth-9) - slider->GetWidth()); 
-						slider->Move(checked_range_cast<int>(fRatio), 0); 
-						pc->AddElement(slider);
-						pWindowMenuConsole->AddMenuCenterY(pc);
-						
-					}
-					
 					szMenuText = getLocalised("system_menus_options_input_customize_controls");
 					me = new CMenuElementText(-1, hFontMenu, szMenuText, fPosX1, 0.f, lColor, 1.f, OPTIONS_INPUT_CUSTOMIZE_KEYS_1);
 					pWindowMenuConsole->AddMenuCenterY(me);
@@ -1264,12 +1143,9 @@ bool Menu2_Render() {
 					bBOOL = false;
 					ARXMenu_Options_Control_GetInvertMouse(bBOOL);
 
-					if (bBOOL)
-					{
+					if(bBOOL) {
 						((CMenuCheckButton*)me)->iState=1;
-					}
-					else
-					{
+					} else {
 						((CMenuCheckButton*)me)->iState=0;
 					}
 
@@ -1428,7 +1304,7 @@ bool Menu2_Render() {
 
 					pWindowMenuConsole=new CWindowMenuConsole(iWindowConsoleOffsetX,iWindowConsoleOffsetY,iWindowConsoleWidth,iWindowConsoleHeight,OPTIONS_INPUT_CUSTOMIZE_KEYS_1);
 
-					CUSTOM_CTRL_FUNC("system_menus_options_input_customize_controls_mouselook",1, BUTTON_MENUOPTIONS_CONTROLS_CUST_MOUSELOOK1, BUTTON_MENUOPTIONS_CONTROLS_CUST_MOUSELOOK2);
+					CUSTOM_CTRL_FUNC("system_menus_options_input_customize_controls_mouselook",1, BUTTON_MENUOPTIONS_CONTROLS_CUST_USE1, BUTTON_MENUOPTIONS_CONTROLS_CUST_USE2);
 
 					CUSTOM_CTRL_FUNC("system_menus_options_input_customize_controls_action_combine",1, BUTTON_MENUOPTIONS_CONTROLS_CUST_ACTIONCOMBINE1, BUTTON_MENUOPTIONS_CONTROLS_CUST_ACTIONCOMBINE2);
 					CUSTOM_CTRL_FUNC("system_menus_options_input_customize_controls_jump",1,BUTTON_MENUOPTIONS_CONTROLS_CUST_JUMP1, BUTTON_MENUOPTIONS_CONTROLS_CUST_JUMP2);
@@ -1533,8 +1409,7 @@ bool Menu2_Render() {
 				}
 				break;
 
-			case QUIT:
-				{
+			case QUIT: {
 					std::string szMenuText;
 					CMenuElement *me = NULL;
 					CWindowMenuConsole *pWindowMenuConsole=new CWindowMenuConsole(iWindowConsoleOffsetX,iWindowConsoleOffsetY,iWindowConsoleWidth,iWindowConsoleHeight,QUIT);
@@ -1565,9 +1440,9 @@ bool Menu2_Render() {
 					pWindowMenu->AddConsole(pWindowMenuConsole);
 					pWindowMenu->eCurrentMenuState=QUIT;
 
-				}
+
 				break;
-				
+			}
 			default: break; // Unhandled menu state.
 			}
 
@@ -1575,22 +1450,18 @@ bool Menu2_Render() {
 	}
 	pMenu->Render();
 
-	if(pWindowMenu)
-	{
-		if(!bScroll)
-		{
+	if(pWindowMenu) {
+		if(!bScroll) {
 			pWindowMenu->fAngle=90.f;
 			pWindowMenu->eCurrentMenuState=pMenu->eOldMenuWindowState;
 		}
 
 		pWindowMenu->Update(ARXDiffTimeMenu);
 
-		if (pWindowMenu)
-		{
+		if(pWindowMenu) {
 			MENUSTATE eMS=pWindowMenu->Render();
 
-			if(eMS!=NOP)
-			{
+			if(eMS != NOP) {
 				pMenu->eOldMenuWindowState=eMS;
 			}
 		}
@@ -1602,13 +1473,12 @@ bool Menu2_Render() {
 
 	// If the menu needs to be reinitialized, then the text in the TextManager is probably using bad fonts that were deleted already
 	// Skip one update in this case
-	if(pTextManage && !pMenu->bReInitAll)
-	{
+	if(pTextManage && !pMenu->bReInitAll) {
 		pTextManage->Update(ARXDiffTimeMenu);
 		pTextManage->Render();
 	}
 
-	GRenderer->GetTextureStage(0)->SetWrapMode(TextureStage::WrapClamp);
+	GRenderer->GetTextureStage(0)->setWrapMode(TextureStage::WrapClamp);
 
 	GRenderer->SetRenderState(Renderer::Fog, false);
 	GRenderer->SetRenderState(Renderer::DepthWrite, false);
@@ -1616,17 +1486,15 @@ bool Menu2_Render() {
 	GRenderer->SetCulling(Renderer::CullNone);
 	pMenuCursor->DrawCursor();
 
-	if (pTextureLoadRender)
-	{
+	if(pTextureLoadRender) {
 		GRenderer->SetRenderState(Renderer::DepthTest, false);
 
 		int iOffsetX = 0;
 		int iOffsetY=0;
 
-		if ((DANAEMouse.y + INTERFACE_RATIO_DWORD(pTextureLoad->m_dwHeight)) > DANAESIZY)
-		{
+		if((DANAEMouse.y + INTERFACE_RATIO_DWORD(pTextureLoad->m_dwHeight)) > g_size.height()) {
 			
-			float fOffestY    = iOffsetY - INTERFACE_RATIO_DWORD(pTextureLoad->m_dwHeight) ;
+			float fOffestY = iOffsetY - INTERFACE_RATIO_DWORD(pTextureLoad->m_dwHeight) ;
 			iOffsetY = checked_range_cast<int>(fOffestY);
 		}
 
@@ -1646,10 +1514,8 @@ bool Menu2_Render() {
 		pTextureLoadRender=NULL;
 	}
 
-	if(ProcessFadeInOut(bFadeInOut,0.1f))
-	{
-		switch(iFadeAction)
-		{
+	if(ProcessFadeInOut(bFadeInOut,0.1f)) {
+		switch(iFadeAction) {
 		case AMCM_CREDITS:
 			ARX_MENU_Clicked_CREDITS();
 			iFadeAction=-1;
@@ -1672,13 +1538,12 @@ bool Menu2_Render() {
 		}
 	}
 
+	GRenderer->GetTextureStage(0)->setMinFilter(TextureStage::FilterLinear);
+	GRenderer->GetTextureStage(0)->setMagFilter(TextureStage::FilterLinear);
+	GRenderer->GetTextureStage(0)->setWrapMode(TextureStage::WrapRepeat);
+
 	GRenderer->SetRenderState(Renderer::AlphaBlending, false);
-	GRenderer->GetTextureStage(0)->SetMinFilter(TextureStage::FilterLinear);
-	GRenderer->GetTextureStage(0)->SetMagFilter(TextureStage::FilterLinear);
-	GRenderer->GetTextureStage(0)->SetWrapMode(TextureStage::WrapRepeat);
-
 	GRenderer->SetRenderState(Renderer::DepthWrite, true);
-
 	GRenderer->SetRenderState(Renderer::DepthTest, true);
 	GRenderer->SetCulling(Renderer::CullCCW);
 
@@ -1686,9 +1551,10 @@ bool Menu2_Render() {
 	return true;
 }
 
-//-----------------------------------------------------------------------------
 
-CMenuElement::CMenuElement(MENUSTATE _ms) : CMenuZone(), enabled(true)
+CMenuElement::CMenuElement(MENUSTATE _ms)
+	: CMenuZone()
+	, enabled(true)
 {
 	ePlace=NOCENTER;
 	eState=TNOP;
@@ -1696,65 +1562,48 @@ CMenuElement::CMenuElement(MENUSTATE _ms) : CMenuZone(), enabled(true)
 	iShortCut=-1;
 }
 
-//-----------------------------------------------------------------------------
+CMenuElement::~CMenuElement() {
 
-CMenuElement::~CMenuElement()
-{
-	if( this == pMenuElementApply )
-	{
+	if(this == pMenuElementApply) {
 		pMenuElementApply = NULL;
 	}
 
-	if( this == pMenuElementResume )
-	{
+	if(this == pMenuElementResume) {
 		pMenuElementResume = NULL;
 	}
 
-	if( this == pLoadConfirm )
-	{
+	if(this == pLoadConfirm) {
 		pLoadConfirm = NULL;
 	}
 
-	if( this == pDeleteConfirm )
-	{
+	if(this == pDeleteConfirm) {
 		pDeleteConfirm = NULL;
 	}
 
-	if( this == pDeleteButton )
-	{
+	if(this == pDeleteButton) {
 		pDeleteButton = NULL;
 	}
 
-	if( this == pMenuSliderResol )
-	{
+	if(this == pMenuSliderResol) {
 		pMenuSliderResol = NULL;
 	}
 	
 	if(this == fullscreenCheckbox) {
 		fullscreenCheckbox = NULL;
 	}
-
-	if( this == pMenuSliderBpp )
-	{
-		pMenuSliderBpp = NULL;
-	}
 }
 
-//-----------------------------------------------------------------------------
+CMenuElement* CMenuElement::OnShortCut() {
 
-CMenuElement* CMenuElement::OnShortCut()
-{
-	if(iShortCut==-1) return NULL;
+	if(iShortCut == -1)
+		return NULL;
 
-	if( GInput->isKeyPressedNowUnPressed(iShortCut) )
-	{
+	if(GInput->isKeyPressedNowUnPressed(iShortCut)) {
 		return this;
 	}
 
 	return NULL;
 }
-
-//-----------------------------------------------------------------------------
 
 CMenuElementText::CMenuElementText(int _iID, Font* _pFont, const std::string& _pText,float _fPosX,float _fPosY,Color _lColor,float _fSize,MENUSTATE _eMs) : CMenuElement(_eMs)
 {
@@ -1762,8 +1611,7 @@ CMenuElementText::CMenuElementText(int _iID, Font* _pFont, const std::string& _p
 
 	pFont = _pFont;
 
-	if( !_pText.compare( "---") )
-	{
+	if(!_pText.compare("---")) {
 		bTestYDouble=true;
 	}
 
@@ -1786,15 +1634,11 @@ CMenuElementText::CMenuElementText(int _iID, Font* _pFont, const std::string& _p
 	iPosCursor = _pText.length() + 1;
 }
 
-//-----------------------------------------------------------------------------
-
 CMenuElementText::~CMenuElementText()
 {
 }
 
-//-----------------------------------------------------------------------------
-
-void CMenuElementText::SetText( const std::string& _pText )
+void CMenuElementText::SetText(const std::string & _pText)
 {
 	lpszText = _pText;
 
@@ -1804,36 +1648,26 @@ void CMenuElementText::SetText( const std::string& _pText )
 	rZone.bottom = textSize.y + rZone.top;
 }
 
-//-----------------------------------------------------------------------------
-
 void CMenuElementText::Update(int _iDTime) {
 	(void)_iDTime;
 }
 
-//-----------------------------------------------------------------------------
+bool CMenuElementText::OnMouseDoubleClick(int _iMouseButton) {
 
-bool CMenuElementText::OnMouseDoubleClick(int _iMouseButton)
-{
-	switch(iID)
-	{
+	switch(iID) {
 	case BUTTON_MENUEDITQUEST_LOAD:
 		OnMouseClick(_iMouseButton);
 
-		if (pWindowMenu)
-		{
-			for (size_t i = 0 ; i < pWindowMenu->vWindowConsoleElement.size() ; i++)
-			{
+		if(pWindowMenu) {
+			for(size_t i = 0; i < pWindowMenu->vWindowConsoleElement.size(); i++) {
 				CWindowMenuConsole *p = pWindowMenu->vWindowConsoleElement[i];
 
-				if ( p->eMenuState == EDIT_QUEST_LOAD )
-				{
-					for (size_t j = 0 ; j < p->MenuAllZone.vMenuZone.size() ; j++)
-					{
-						CMenuElement *pMenuElement = (CMenuElement*) ( (CMenuElement*)p->MenuAllZone.vMenuZone[j] )->GetZoneWithID( BUTTON_MENUEDITQUEST_LOAD_CONFIRM );
+				if(p->eMenuState == EDIT_QUEST_LOAD) {
+					for(size_t j = 0; j < p->MenuAllZone.vMenuZone.size(); j++) {
+						CMenuElement *pMenuElement = (CMenuElement*) ( (CMenuElement*)p->MenuAllZone.vMenuZone[j] )->GetZoneWithID(BUTTON_MENUEDITQUEST_LOAD_CONFIRM);
 
-						if( pMenuElement )
-						{
-							pMenuElement->OnMouseClick( _iMouseButton );
+						if(pMenuElement) {
+							pMenuElement->OnMouseClick(_iMouseButton);
 						}
 					}
 				}
@@ -1846,7 +1680,6 @@ bool CMenuElementText::OnMouseDoubleClick(int _iMouseButton)
 	return false;
 }
 
-//-----------------------------------------------------------------------------
 // true: block les zones de checks
 bool CMenuElementText::OnMouseClick(int _iMouseButton) {
 	
@@ -1856,8 +1689,7 @@ bool CMenuElementText::OnMouseClick(int _iMouseButton) {
 	
 	(void)_iMouseButton;
 	
-	switch(eState)
-	{
+	switch(eState) {
 	case EDIT:
 		eState=EDIT_TIME;
 		return true;
@@ -1868,61 +1700,46 @@ bool CMenuElementText::OnMouseClick(int _iMouseButton) {
 	default: break;
 	}
 
-	if (iID != BUTTON_MENUMAIN_RESUMEGAME)
-	{
+	if(iID != BUTTON_MENUMAIN_RESUMEGAME) {
 		ARX_SOUND_PlayMenu(SND_MENU_CLICK);
 	}
 
-	switch (iID)
-	{
-	case -1:
-		{
+	switch(iID) {
+	case -1: {
 			return false;
 		}
 		break;
 	// MENUMAIN
-	case BUTTON_MENUMAIN_RESUMEGAME:
-		{
+	case BUTTON_MENUMAIN_RESUMEGAME: {
 			pTextManage->Clear();
 			ARXMenu_ResumeGame();
 			ARX_SOUND_PlayMenu(SND_MENU_CLICK);
 		}
 		break;
-	case BUTTON_MENUMAIN_NEWQUEST:
-		{
-			bool bBOOL = false;
-			ARXMenu_GetResumeGame(bBOOL);
-
-			if (!bBOOL)
-			{
+	case BUTTON_MENUMAIN_NEWQUEST: {
+			
+			if(!ARXMenu_CanResumeGame()) {
 				ARXMenu_NewQuest();
 			}
 		}
 		break;
-	case BUTTON_MENUMAIN_LOADQUEST:
-		{
+	case BUTTON_MENUMAIN_LOADQUEST: {
 		}break;
-	case BUTTON_MENUMAIN_SAVEQUEST:
-		{
+	case BUTTON_MENUMAIN_SAVEQUEST: {
 		}break;
-	case BUTTON_MENUMAIN_MULTIPLAYER:
-		{
+	case BUTTON_MENUMAIN_MULTIPLAYER: {
 		}break;
-	case BUTTON_MENUMAIN_OPTIONS:
-		{
+	case BUTTON_MENUMAIN_OPTIONS: {
 		}break;
-	case BUTTON_MENUMAIN_CREDITS:
-		{
+	case BUTTON_MENUMAIN_CREDITS: {
 			ARXMenu_Credits();
 		}
 		break;
-	case BUTTON_MENUMAIN_QUIT:
-		{
+	case BUTTON_MENUMAIN_QUIT: {
 			ARXMenu_Quit();
 		}
 		break;
-	case BUTTON_MENUNEWQUEST_CONFIRM:
-		{
+	case BUTTON_MENUNEWQUEST_CONFIRM: {
 			ARXMenu_NewQuest();
 		}
 		break;
@@ -1931,73 +1748,56 @@ bool CMenuElementText::OnMouseClick(int _iMouseButton) {
 			newWidth = config.video.resolution.x;
 			newHeight = config.video.resolution.y;
 			newFullscreen = config.video.fullscreen;
-			newBpp = config.video.bpp;
 			break;
 		}
-	case BUTTON_MENUEDITQUEST_LOAD_INIT:
-		{
-			if ( pWindowMenu )
-				for (size_t i = 0 ; i < pWindowMenu->vWindowConsoleElement.size() ; i++)
-				{
+	case BUTTON_MENUEDITQUEST_LOAD_INIT: {
+			if(pWindowMenu)
+				for(size_t i = 0; i < pWindowMenu->vWindowConsoleElement.size(); i++) {
 					CWindowMenuConsole * p = pWindowMenu->vWindowConsoleElement[i];
 
-					if(p->eMenuState == EDIT_QUEST_LOAD) {
-						
+					if(p->eMenuState == EDIT_QUEST_LOAD) {						
 						p->lData = lData;
 
-						for (size_t j = 0 ; j < p->MenuAllZone.vMenuZone.size() ; j++)
-						{
+						for(size_t j = 0; j < p->MenuAllZone.vMenuZone.size(); j++) {
 							CMenuZone *cz = p->MenuAllZone.vMenuZone[j];
 
-							if ( cz->iID == BUTTON_MENUEDITQUEST_LOAD )
-							{
-								( (CMenuElementText *)cz )->bSelected = false;
+							if(cz->iID == BUTTON_MENUEDITQUEST_LOAD) {
+								((CMenuElementText *)cz)->bSelected = false;
 							}
 						}
 					}
 				}
 		}
 		break;
-	case BUTTON_MENUEDITQUEST_LOAD:
-		{
-			if (pWindowMenu)
-			{
+	case BUTTON_MENUEDITQUEST_LOAD: {
+			if(pWindowMenu) {
 			pLoadConfirm->SetCheckOn();
 			pLoadConfirm->lColor = pLoadConfirm->lOldColor;
 			pDeleteConfirm->SetCheckOn();
 			pDeleteConfirm->lColor = pDeleteConfirm->lOldColor;
 
-				for (size_t i = 0 ; i < pWindowMenu->vWindowConsoleElement.size() ; i++)
-			{
+			for(size_t i = 0; i < pWindowMenu->vWindowConsoleElement.size(); i++) {
 				CWindowMenuConsole *p = pWindowMenu->vWindowConsoleElement[i];
 				
 				if(p->eMenuState == EDIT_QUEST_LOAD) {
-					
 					p->lData = lData;
 					
-						for (size_t j = 0 ; j < p->MenuAllZone.vMenuZone.size(); j++)
-					{
+					for(size_t j = 0; j < p->MenuAllZone.vMenuZone.size(); j++) {
 						CMenuZone *cz = p->MenuAllZone.vMenuZone[j];
 
-						if ( cz->iID == BUTTON_MENUEDITQUEST_LOAD )
-						{
-							( (CMenuElementText *)cz )->bSelected = false;
+						if(cz->iID == BUTTON_MENUEDITQUEST_LOAD) {
+							((CMenuElementText *)cz)->bSelected = false;
 						}
 					}
-
 					bSelected = true;
-
 					}
 				}
 			}
 			}
 		break;
-	case BUTTON_MENUEDITQUEST_LOAD_CONFIRM:
-		{
-			if (pWindowMenu)
-			{
-				for (size_t i = 0 ; i < pWindowMenu->vWindowConsoleElement.size() ; i++)
-			{
+	case BUTTON_MENUEDITQUEST_LOAD_CONFIRM: {
+			if(pWindowMenu) {
+				for(size_t i = 0; i < pWindowMenu->vWindowConsoleElement.size(); i++) {
 				CWindowMenuConsole *p = pWindowMenu->vWindowConsoleElement[i];
 
 				if(p->eMenuState == EDIT_QUEST_LOAD) {
@@ -2030,15 +1830,12 @@ bool CMenuElementText::OnMouseClick(int _iMouseButton) {
 		pDeleteConfirm->lColor = Color::grayb(127);
 		break;
 	// MENUSAVEQUEST
-	case BUTTON_MENUEDITQUEST_SAVE:
-		{
-			if (pWindowMenu)
-				for (size_t i = 0 ; i < pWindowMenu->vWindowConsoleElement.size() ; i++)
-			{
+	case BUTTON_MENUEDITQUEST_SAVE: {
+			if(pWindowMenu)
+				for(size_t i = 0; i < pWindowMenu->vWindowConsoleElement.size(); i++) {
 				CWindowMenuConsole *p = pWindowMenu->vWindowConsoleElement[i];
 
 				if(p->eMenuState == EDIT_QUEST_SAVE_CONFIRM) {
-					
 					p->lData = lData;
 					CMenuElementText * me = (CMenuElementText *) p->MenuAllZone.vMenuZone[1];
 					
@@ -2096,18 +1893,17 @@ bool CMenuElementText::OnMouseClick(int _iMouseButton) {
 		}
 		
 		case BUTTON_MENUOPTIONSVIDEO_APPLY: {
-			if(newWidth != config.video.resolution.x || newHeight!=config.video.resolution.y
-			   || newFullscreen != config.video.fullscreen || newBpp != config.video.bpp) {
-				ARXMenu_Private_Options_Video_SetResolution(newFullscreen, newWidth, newHeight,
-				                                            newBpp);
+			if(newWidth != config.video.resolution.x
+			   || newHeight!=config.video.resolution.y
+			   || newFullscreen != config.video.fullscreen
+			) {
+				ARXMenu_Private_Options_Video_SetResolution(newFullscreen, newWidth, newHeight);
 				pMenuSliderResol->iOldPos = -1;
-				pMenuSliderBpp->iOldPos = -1;
 				fullscreenCheckbox->iOldState = -1;
 			}
 			pMenu->bReInitAll=true;
 		}
 		break;
-		
 	// MENUOPTIONS_CONTROLS
 	case BUTTON_MENUOPTIONS_CONTROLS_CUST_JUMP1:
 		{
@@ -2169,7 +1965,7 @@ bool CMenuElementText::OnMouseClick(int _iMouseButton) {
 	case BUTTON_MENUOPTIONS_CONTROLS_CUST_CROUCH2:
 		{
 		}break;
-	case BUTTON_MENUOPTIONS_CONTROLS_CUST_MOUSELOOK1:
+	case BUTTON_MENUOPTIONS_CONTROLS_CUST_USE1:
 		{
 		}break;
 	case BUTTON_MENUOPTIONS_CONTROLS_CUST_ACTIONCOMBINE1:
@@ -2210,18 +2006,14 @@ bool CMenuElementText::OnMouseClick(int _iMouseButton) {
 	}
 
 	if(eMenuState == EDIT_QUEST_SAVE_CONFIRM) {
-		
-		for (size_t i = 0 ; i < pWindowMenu->vWindowConsoleElement.size() ; i++)
-		{
+		for(size_t i = 0; i < pWindowMenu->vWindowConsoleElement.size(); i++) {
 			CWindowMenuConsole *p = pWindowMenu->vWindowConsoleElement[i];
 
-			if ( p->eMenuState == eMenuState )
-			{
+			if(p->eMenuState == eMenuState) {
 				p->lData = lData;
 				CMenuElementText * me = (CMenuElementText *) p->MenuAllZone.vMenuZone[1];
 
 				if(me) {
-					
 					me->lData = lData;
 					
 					if(lData != -1) {
@@ -2243,25 +2035,23 @@ bool CMenuElementText::OnMouseClick(int _iMouseButton) {
 	return false;
 }
 
-//-----------------------------------------------------------------------------
 // true: block les zones de checks
-CMenuElement* CMenuElementText::OnShortCut()
-{
-	if(iShortCut==-1) return NULL;
+CMenuElement* CMenuElementText::OnShortCut() {
 
-	if( GInput->isKeyPressedNowUnPressed(iShortCut) )
-	{
+	if(iShortCut==-1)
+		return NULL;
+
+	if(GInput->isKeyPressedNowUnPressed(iShortCut)) {
 		return this;
 	}
 
 	return NULL;
 }
 
-//-----------------------------------------------------------------------------
+void CMenuElementText::Render() {
 
-void CMenuElementText::Render()
-{
-	if(bNoMenu) return;
+	if(bNoMenu)
+		return;
 
 	Vec3f ePos;
 	ePos.x = (float) rZone.left;
@@ -2278,11 +2068,10 @@ void CMenuElementText::Render()
 
 }
 
-//-----------------------------------------------------------------------------
+void CMenuElementText::RenderMouseOver() {
 
-void CMenuElementText::RenderMouseOver()
-{
-	if(bNoMenu) return;
+	if(bNoMenu)
+		return;
 
 	pMenuCursor->SetMouseOver();
 
@@ -2299,7 +2088,6 @@ void CMenuElementText::RenderMouseOver()
 	GRenderer->SetRenderState(Renderer::AlphaBlending, false);
 
 	switch(iID) {
-		
 		case BUTTON_MENUEDITQUEST_LOAD:
 		case BUTTON_MENUEDITQUEST_SAVEINFO: {
 			
@@ -2328,17 +2116,12 @@ void CMenuElementText::RenderMouseOver()
 	}
 }
 
-//-----------------------------------------------------------------------------
-
-Vec2i CMenuElementText::GetTextSize() const
-{
+Vec2i CMenuElementText::GetTextSize() const {
 	return pFont->getTextSize(lpszText);
 }
 
-//-----------------------------------------------------------------------------
+CMenuState::CMenuState(MENUSTATE _ms) {
 
-CMenuState::CMenuState(MENUSTATE _ms)
-{
 	bReInitAll=false;
 	eMenuState = _ms;
 	eOldMenuState = NOP;
@@ -2384,32 +2167,26 @@ MENUSTATE CMenuState::Update(int _iDTime) {
 	return NOP;
 }
 
-//-----------------------------------------------------------------------------
+void CMenuState::Render() {
 
-void CMenuState::Render()
-{
-	if(bNoMenu) return;
+	if(bNoMenu)
+		return;
 
-	if (pTexBackGround)
-		EERIEDrawBitmap2(0, 0, static_cast<float>(DANAESIZX), static_cast<float>(DANAESIZY), 0.999f, pTexBackGround, Color::white);
-
-	//------------------------------------------------------------------------
+	if(pTexBackGround)
+		EERIEDrawBitmap2(0, 0, static_cast<float>(g_size.width()), static_cast<float>(g_size.height()), 0.999f, pTexBackGround, Color::white);
 
 	int t=pMenuAllZone->GetNbZone();
 
 	int iARXDiffTimeMenu = checked_range_cast<int>(ARXDiffTimeMenu);
 
-
-	for(int i=0;i<t;++i)
-	{
+	for(int i = 0; i < t; ++i) {
 		CMenuElement *pMe=(CMenuElement*)pMenuAllZone->GetZoneNum(i);
 		pMe->Update(iARXDiffTimeMenu);
 		pMe->Render();
 	}
 
 	//HIGHLIGHT
-	if(pZoneClick)
-	{
+	if(pZoneClick) {
 		pZoneClick->RenderMouseOver();
 	}
 
@@ -2418,10 +2195,7 @@ void CMenuState::Render()
 	pMenuAllZone->DrawZone();
 }
 
-//-----------------------------------------------------------------------------
-
-CMenuZone::CMenuZone()
-{
+CMenuZone::CMenuZone() {
 	bActif = true;
 	bCheck=true;
 	bTestYDouble=false;
@@ -2436,10 +2210,8 @@ CMenuZone::CMenuZone()
 	rZone.right = 0;
 }
 
-//-----------------------------------------------------------------------------
+CMenuZone::CMenuZone(int _iX1, int _iY1, int _iX2, int _iY2, CMenuZone * _pRef) {
 
-CMenuZone::CMenuZone(int _iX1,int _iY1,int _iX2,int _iY2, CMenuZone * _pRef)
-{
 	bActif=true;
 	rZone.left=_iX1;
 	rZone.top=_iY1;
@@ -2452,105 +2224,85 @@ CMenuZone::CMenuZone(int _iX1,int _iY1,int _iX2,int _iY2, CMenuZone * _pRef)
 	pData=NULL;
 }
 
-//-----------------------------------------------------------------------------
-
-CMenuZone::~CMenuZone()
-{
+CMenuZone::~CMenuZone() {
 
 }
 
-//-----------------------------------------------------------------------------
-
-void CMenuZone::Move(int _iX,int _iY)
-	{
-	rZone.left        += _iX;
-	rZone.top        += _iY;
-	rZone.right        += _iX;
-	rZone.bottom    += _iY;
+void CMenuZone::Move(int _iX, int _iY) {
+	rZone.left   += _iX;
+	rZone.top    += _iY;
+	rZone.right  += _iX;
+	rZone.bottom += _iY;
 }
 
-//-----------------------------------------------------------------------------
+void CMenuZone::SetPos(float _fX, float _fY) {
 
-void CMenuZone::SetPos(float _fX,float _fY)
-{
-	int iWidth        = rZone.right - rZone.left;
-	int iHeight        = rZone.bottom - rZone.top;
+	int iWidth  = rZone.right - rZone.left;
+	int iHeight = rZone.bottom - rZone.top;
 
 	int iX = checked_range_cast<int>(_fX);
 	int iY = checked_range_cast<int>(_fY);
 
-	rZone.left        = iX;
-	rZone.top        = iY;
-	rZone.right        = iX + abs(iWidth);
-	rZone.bottom    = iY + abs(iHeight);
+	rZone.left   = iX;
+	rZone.top    = iY;
+	rZone.right  = iX + abs(iWidth);
+	rZone.bottom = iY + abs(iHeight);
 }
 
-//-----------------------------------------------------------------------------
+CMenuZone * CMenuZone::IsMouseOver(const Vec2s& mousePos) const {
 
-CMenuZone * CMenuZone::IsMouseOver(const Vec2s& mousePos) const
-{
 	int iYDouble=0;
 
-	if(bTestYDouble)
-	{
+	if(bTestYDouble) {
 		iYDouble=(rZone.bottom-rZone.top)>>1;
 	}
 
-	if(    bActif && 
-		(mousePos.x >= rZone.left) &&
-		(mousePos.y >= (rZone.top-iYDouble)) &&
-		(mousePos.x <= rZone.right) &&
-		(mousePos.y <= (rZone.bottom+iYDouble)) )
+	if(bActif
+	   && mousePos.x >= rZone.left
+	   && mousePos.y >= rZone.top - iYDouble
+	   && mousePos.x <= rZone.right
+	   && mousePos.y <= rZone.bottom + iYDouble
+	) {
 		return pRef;
+	}
 
 	return NULL;
 }
 
-//-----------------------------------------------------------------------------
+CMenuAllZone::CMenuAllZone() {
 
-CMenuAllZone::CMenuAllZone()
-{
 	vMenuZone.clear();
 
 	vector<CMenuZone*>::iterator i;
 
-	for(i=vMenuZone.begin();i!=vMenuZone.end();++i)
-	{
-		CMenuZone *zone=*i;
+	for(i = vMenuZone.begin(); i != vMenuZone.end(); ++i) {
+		CMenuZone *zone = *i;
 		delete zone;
 	}
 }
 
-//-----------------------------------------------------------------------------
+CMenuAllZone::~CMenuAllZone() {
 
-CMenuAllZone::~CMenuAllZone()
-{
 	for(std::vector<CMenuZone*>::iterator it = vMenuZone.begin(), it_end = vMenuZone.end(); it != it_end; ++it)
 		delete *it;
 }
 
-//-----------------------------------------------------------------------------
+void CMenuAllZone::AddZone(CMenuZone *_pMenuZone) {
 
-void CMenuAllZone::AddZone(CMenuZone *_pMenuZone)
-{
 	vMenuZone.push_back(_pMenuZone);
 }
 
-//-----------------------------------------------------------------------------
+CMenuZone * CMenuAllZone::CheckZone(const Vec2s& mousePos) const {
 
-CMenuZone * CMenuAllZone::CheckZone(const Vec2s& mousePos) const
-{
 	std::vector<CMenuZone*>::const_iterator i;
 
-	for(i=vMenuZone.begin();i!=vMenuZone.end();++i)
-	{
+	for(i = vMenuZone.begin(); i != vMenuZone.end(); ++i) {
 		CMenuZone *zone=*i;
 
-		if(zone->bCheck && zone->bActif)
-		{
+		if(zone->bCheck && zone->bActif) {
 			CMenuZone * pRef = ((*i)->IsMouseOver(mousePos));
 
-            if (pRef)
+            if(pRef)
                 return pRef;
 		}
 	}
@@ -2558,18 +2310,16 @@ CMenuZone * CMenuAllZone::CheckZone(const Vec2s& mousePos) const
 	return NULL;
 }
 
-//-----------------------------------------------------------------------------
+CMenuZone * CMenuAllZone::GetZoneNum(int _iNum) {
 
-CMenuZone * CMenuAllZone::GetZoneNum(int _iNum)
-{
 	vector<CMenuZone*>::iterator i;
-	int iNum=0;
+	int iNum = 0;
 
-	for(i=vMenuZone.begin();i!=vMenuZone.end();++i)
-	{
-		CMenuZone *zone=*i;
+	for(i = vMenuZone.begin(); i != vMenuZone.end(); ++i) {
+		CMenuZone *zone = *i;
 
-		if(iNum==_iNum) return zone;
+		if(iNum == _iNum)
+			return zone;
 
 		iNum++;
 	}
@@ -2577,33 +2327,26 @@ CMenuZone * CMenuAllZone::GetZoneNum(int _iNum)
 	return NULL;
 }
 
-//-----------------------------------------------------------------------------
+CMenuZone * CMenuAllZone::GetZoneWithID(int _iID) {
 
-CMenuZone * CMenuAllZone::GetZoneWithID(int _iID)
-{
-	for (std::vector<CMenuZone*>::iterator i = vMenuZone.begin(), i_end = vMenuZone.end(); i != i_end; ++i)
-		if (CMenuZone *zone = ((CMenuElement*)(*i))->GetZoneWithID(_iID))
+	for(std::vector<CMenuZone*>::iterator i = vMenuZone.begin(), i_end = vMenuZone.end(); i != i_end; ++i) {
+		if(CMenuZone *zone = ((CMenuElement*)(*i))->GetZoneWithID(_iID))
 			return zone;
+	}
 
 	return NULL;
 }
 
-//-----------------------------------------------------------------------------
+void CMenuAllZone::Move(int _iPosX, int _iPosY) {
 
-void CMenuAllZone::Move(int _iPosX,int _iPosY)
-{
-	for (std::vector<CMenuZone*>::iterator i = vMenuZone.begin(), i_end = vMenuZone.end(); i != i_end; ++i)
+	for(std::vector<CMenuZone*>::iterator i = vMenuZone.begin(), i_end = vMenuZone.end(); i != i_end; ++i) {
 		(*i)->Move(_iPosX, _iPosY);
+	}
 }
 
-//-----------------------------------------------------------------------------
-
-int CMenuAllZone::GetNbZone()
-{
+int CMenuAllZone::GetNbZone() {
 	return vMenuZone.size();
 }
-
-//-----------------------------------------------------------------------------
 
 void CMenuAllZone::DrawZone()
 {
@@ -2647,8 +2390,6 @@ void CMenuAllZone::DrawZone()
 #endif // #ifndef NODEBUGZONE
 }
 
-//-----------------------------------------------------------------------------
-
 CMenuCheckButton::CMenuCheckButton(int _iID, float _fPosX,float _fPosY,int _iTaille,TextureContainer *_pTex1,TextureContainer *_pTex2, CMenuElementText *_pText)
 	:CMenuElement(NOP)
 {
@@ -2681,8 +2422,7 @@ CMenuCheckButton::CMenuCheckButton(int _iID, float _fPosX,float _fPosY,int _iTai
 
 	Vec2i textSize(0,0);
 
-	if ( pText )
-	{
+	if(pText) {
 		textSize = pText->pFont->getTextSize(pText->lpszText); 
 
 		_iTaille = std::max<int>(_iTaille, textSize.y);
@@ -2731,31 +2471,23 @@ bool CMenuCheckButton::OnMouseClick(int _iMouseButton) {
 	//NB : It seems that iState cannot be negative (used as tabular index / used as bool) but need further approval
 	arx_assert(iState >= 0);
 
-	if ((size_t)iState >= vTex.size())
-	{
-
+	if((size_t)iState >= vTex.size()) {
 		iState = 0;
 	}
 
 	ARX_SOUND_PlayMenu(SND_MENU_CLICK);
 
-	switch (iID)
-	{
-	case BUTTON_MENUOPTIONSVIDEO_FULLSCREEN:
-		{
+	switch (iID) {
+	case BUTTON_MENUOPTIONSVIDEO_FULLSCREEN: {
 			newFullscreen = ((iState)?true:false);
 			
 			if(pMenuSliderResol) {
 				pMenuSliderResol->setEnabled(newFullscreen);
 			}
-			if(pMenuSliderBpp) {
-				pMenuSliderBpp->setEnabled(newFullscreen);
-			}
 			
 		}
 		break;
-	case BUTTON_MENUOPTIONSVIDEO_CROSSHAIR:
-		{
+	case BUTTON_MENUOPTIONSVIDEO_CROSSHAIR: {
 			config.video.showCrosshair=(iState)?true:false;
 		}
 		break;
@@ -2768,13 +2500,11 @@ bool CMenuCheckButton::OnMouseClick(int _iMouseButton) {
 		config.video.vsync = iState ? true : false;
 		break;
 	}
-	case BUTTON_MENUOPTIONSAUDIO_EAX:
-		{
+	case BUTTON_MENUOPTIONSAUDIO_EAX: {
 			ARXMenu_Options_Audio_SetEAX((iState)?true:false);
 		}
 		break;
-	case BUTTON_MENUOPTIONS_CONTROLS_INVERTMOUSE:
-		{
+	case BUTTON_MENUOPTIONS_CONTROLS_INVERTMOUSE: {
 			ARXMenu_Options_Control_SetInvertMouse((iState)?true:false);
 		}
 		break;
@@ -2794,25 +2524,14 @@ bool CMenuCheckButton::OnMouseClick(int _iMouseButton) {
 		config.input.linkMouseLookToUse = (iState) ? true : false;
 		break;
 	}
-	case BUTTON_MENUOPTIONSVIDEO_BACK:
-	{
-		if(    (pMenuSliderResol)&&
-			(pMenuSliderResol->iOldPos>=0) )
-		{
+	case BUTTON_MENUOPTIONSVIDEO_BACK: {
+		if(pMenuSliderResol && pMenuSliderResol->iOldPos >= 0) {
 			pMenuSliderResol->iPos=pMenuSliderResol->iOldPos;
 			pMenuSliderResol->iOldPos=-1;
 			newWidth=config.video.resolution.x;
 			newHeight=config.video.resolution.y;
 		}
 		
-		if(    (pMenuSliderBpp)&&
-			(pMenuSliderBpp->iOldPos>=0) )
-		{
-			pMenuSliderBpp->iPos=pMenuSliderBpp->iOldPos;
-			pMenuSliderBpp->iOldPos=-1;
-			newBpp=config.video.bpp;
-		}
-				
 		if(fullscreenCheckbox && fullscreenCheckbox->iOldState >= 0) {
 			fullscreenCheckbox->iState = fullscreenCheckbox->iOldState;
 			fullscreenCheckbox->iOldState = -1;
@@ -2820,29 +2539,24 @@ bool CMenuCheckButton::OnMouseClick(int _iMouseButton) {
 		}
 		break;
 	}
-
 	}
 
 	return false;
 }
 
-//-----------------------------------------------------------------------------
-
 void CMenuCheckButton::Update(int /*_iDTime*/)
 {
 }
 
-//-----------------------------------------------------------------------------
+void CMenuCheckButton::Render() {
 
-void CMenuCheckButton::Render()
-{
-	if(bNoMenu) return;
+	if(bNoMenu)
+		return;
 
 	GRenderer->SetRenderState(Renderer::AlphaBlending, true);
 	GRenderer->SetBlendFunc(Renderer::BlendOne, Renderer::BlendOne);
 
-	if (!vTex.empty())
-	{
+	if(!vTex.empty()) {
 		TextureContainer *pTex = vTex[iState];
 
 		TexturedVertex v[4];
@@ -2852,7 +2566,6 @@ void CMenuCheckButton::Render()
 		v[0].rhw=v[1].rhw=v[2].rhw=v[3].rhw=0.999999f;
 		
 		float iY = 0;
-
 		{
 			iY = static_cast<float>(rZone.bottom - rZone.top);
 			iY -= iTaille;
@@ -2863,18 +2576,17 @@ void CMenuCheckButton::Render()
 		EERIEDrawBitmap2(static_cast<float>(rZone.right - iTaille), iY, RATIO_X(iTaille), RATIO_Y(iTaille), 0.f, pTex, color);
 	}
 
-	if (pText)
+	if(pText)
 		pText->Render();
 
 	//DEBUG
 	GRenderer->SetRenderState(Renderer::AlphaBlending, false);
 }
 
-//-----------------------------------------------------------------------------
+void CMenuCheckButton::RenderMouseOver() {
 
-void CMenuCheckButton::RenderMouseOver()
-{
-	if(bNoMenu) return;
+	if(bNoMenu)
+		return;
 
 	pMenuCursor->SetMouseOver();
 
@@ -2900,7 +2612,6 @@ void CMenuCheckButton::RenderMouseOver()
 
 	EERIEDrawBitmap2(static_cast<float>(rZone.right - iTaille), iY, RATIO_X(iTaille), RATIO_Y(iTaille), 0.f, pTex, Color::white); 
 
-
 	//tick
 	if (pText)
 		pText->RenderMouseOver();
@@ -2908,8 +2619,6 @@ void CMenuCheckButton::RenderMouseOver()
 	//DEBUG
 	GRenderer->SetRenderState(Renderer::AlphaBlending, false);
 }
-
-//-----------------------------------------------------------------------------
 
 // Nuky - merges common code of Render() and RenderMouseOver()
 /// Compute members fTexX, fTexY, fTexSX and fTexSY according to rZone and iTaille
@@ -2933,10 +2642,8 @@ void CMenuCheckButton::ComputeTexturesPosition()
 	}*/
 }
 
-//-----------------------------------------------------------------------------
-
-CWindowMenu::CWindowMenu(int _iPosX,int _iPosY,int _iTailleX,int _iTailleY,int _iNbButton) :
-	bMouseListen (true)
+CWindowMenu::CWindowMenu(int _iPosX, int _iPosY, int _iTailleX, int _iTailleY, int _iNbButton)
+	: bMouseListen(true)
 {
 	iPosX=(int)RATIO_X(_iPosX);
 	iPosY=(int)RATIO_Y(_iPosY);
@@ -2969,18 +2676,14 @@ CWindowMenu::CWindowMenu(int _iPosX,int _iPosY,int _iTailleX,int _iTailleY,int _
 	bChangeConsole=false;
 }
 
-//-----------------------------------------------------------------------------
+CWindowMenu::~CWindowMenu() {
 
-CWindowMenu::~CWindowMenu()
-{
-	for (std::vector<CWindowMenuConsole*>::iterator it = vWindowConsoleElement.begin(), it_end = vWindowConsoleElement.end(); it < it_end; ++it)
+	for(std::vector<CWindowMenuConsole*>::iterator it = vWindowConsoleElement.begin(), it_end = vWindowConsoleElement.end(); it < it_end; ++it)
 		delete *it;
 }
 
-//-----------------------------------------------------------------------------
+void CWindowMenu::AddConsole(CWindowMenuConsole *_pMenuConsoleElement) {
 
-void CWindowMenu::AddConsole(CWindowMenuConsole *_pMenuConsoleElement)
-{
 	vWindowConsoleElement.push_back(_pMenuConsoleElement);
 	_pMenuConsoleElement->iOldPosX = 0;
 	_pMenuConsoleElement->iOldPosY = 0;
@@ -2988,31 +2691,24 @@ void CWindowMenu::AddConsole(CWindowMenuConsole *_pMenuConsoleElement)
 	_pMenuConsoleElement->iPosY = iPosY;
 }
 
-//-----------------------------------------------------------------------------
-
-void CWindowMenu::Update(float _fDTime)
-{
-
+void CWindowMenu::Update(float _fDTime) {
 
 	float fCalc	= fPosXCalc + (fDist * sin(radians(fAngle)));
 
 	iPosX = checked_range_cast<int>(fCalc);
-
 	fAngle += _fDTime * 0.08f;
 
-	if (fAngle>90.f) fAngle=90.f;
+	if(fAngle > 90.f)
+		fAngle = 90.f;
 }
 
-//-----------------------------------------------------------------------------
+MENUSTATE CWindowMenu::Render() {
 
-MENUSTATE CWindowMenu::Render()
-{
-	if(bNoMenu) return NOP;
+	if(bNoMenu)
+		return NOP;
 
-	if(bChangeConsole)
-	{
+	if(bChangeConsole) {
 		//TO DO: faire ce que l'on veut
-
 		bChangeConsole=false;
 	}
 
@@ -3028,27 +2724,22 @@ MENUSTATE CWindowMenu::Render()
 
 	MENUSTATE eMS=NOP;
 
-	if (bMouseListen)
-	{
+	if(bMouseListen) {
 		vector<CWindowMenuConsole*>::iterator i;
 
-		for (i = vWindowConsoleElement.begin(); i != vWindowConsoleElement.end(); ++i)
-		{
-			if(eCurrentMenuState==(*i)->eMenuState)
-			{
+		for(i = vWindowConsoleElement.begin(); i != vWindowConsoleElement.end(); ++i) {
+			if(eCurrentMenuState==(*i)->eMenuState) {
 				eMS=(*i)->Update(iPosX, iPosY, 0);
 				
-				if (eMS != NOP)
+				if(eMS != NOP)
 					break;
 			}
 		}
 	}
 
-	for (std::vector<CWindowMenuConsole*>::iterator i = vWindowConsoleElement.begin(); i != vWindowConsoleElement.end(); ++i)
-	{
-		if(eCurrentMenuState==(*i)->eMenuState)
-		{
-			if ((*i)->Render())
+	for(std::vector<CWindowMenuConsole*>::iterator i = vWindowConsoleElement.begin(); i != vWindowConsoleElement.end(); ++i) {
+		if(eCurrentMenuState == (*i)->eMenuState) {
+			if((*i)->Render())
 				GRenderer->SetRenderState(Renderer::AlphaBlending, false);
 
 			break;
@@ -3057,8 +2748,7 @@ MENUSTATE CWindowMenu::Render()
 
 	GRenderer->SetRenderState(Renderer::AlphaBlending, false);
 
-	if (eMS != NOP)
-	{
+	if(eMS != NOP) {
 		eCurrentMenuState=eMS;
 		bChangeConsole=true;
 	}
@@ -3066,12 +2756,12 @@ MENUSTATE CWindowMenu::Render()
 	return eMS;
 }
 
-CWindowMenuConsole::CWindowMenuConsole(int _iPosX,int _iPosY,int _iWidth,int _iHeight,MENUSTATE _eMenuState) :
-	bMouseListen (true),
-	iInterligne (10),
-	bEdit (false),
-	lData(0),
-	pData(NULL)
+CWindowMenuConsole::CWindowMenuConsole(int _iPosX, int _iPosY, int _iWidth, int _iHeight, MENUSTATE _eMenuState)
+	: bMouseListen(true)
+	, iInterligne(10)
+	, bEdit(false)
+	, lData(0)
+	, pData(NULL)
 {
 	iOX=(int)RATIO_X(_iPosX);
 	iOY=(int)RATIO_Y(_iPosY);
@@ -3088,8 +2778,6 @@ CWindowMenuConsole::CWindowMenuConsole(int _iPosX,int _iPosY,int _iWidth,int _iH
 	iPosMenu=-1;
 }
 
-//-----------------------------------------------------------------------------
-
 void CWindowMenuConsole::AddMenu(CMenuElement *_pMenuElement)
 {
 	_pMenuElement->ePlace=NOCENTER;
@@ -3098,49 +2786,39 @@ void CWindowMenuConsole::AddMenu(CMenuElement *_pMenuElement)
 	MenuAllZone.AddZone((CMenuZone*)_pMenuElement);
 }
 
-//-----------------------------------------------------------------------------
+void CWindowMenuConsole::AddMenuCenterY(CMenuElement * _pMenuElement) {
 
-void CWindowMenuConsole::AddMenuCenterY( CMenuElement * _pMenuElement )
-{
 	_pMenuElement->ePlace    =    CENTERY;
-	int iDy                    =    _pMenuElement->rZone.bottom-_pMenuElement->rZone.top;
 
-	int iI                    =    MenuAllZone.GetNbZone();
+	int iDy = _pMenuElement->rZone.bottom-_pMenuElement->rZone.top;
+	int iI  = MenuAllZone.GetNbZone();
 
-	for( int iJ = 0 ; iJ < iI ; iJ++ )
-	{
-		iDy +=    iInterligne;
-		CMenuZone    *pZone    =    MenuAllZone.GetZoneNum(iJ);
-		iDy    +=    pZone->rZone.bottom - pZone->rZone.top;
+	for(int iJ = 0; iJ < iI; iJ++ ) {
+		CMenuZone * pZone = MenuAllZone.GetZoneNum(iJ);
+
+		iDy += iInterligne;
+		iDy += pZone->rZone.bottom - pZone->rZone.top;
 	}
 
 	int iDepY;
 
-	if( iDy < iHeight )
-	{
-		iDepY = iOY + ( ( iHeight - iDy ) >> 1 );
-	}
-	else
-	{
+	if(iDy < iHeight) {
+		iDepY = iOY + ((iHeight - iDy) >> 1);
+	} else {
 		iDepY = iOY;
 	}
 
 	int dy = 0;
 	iI = MenuAllZone.GetNbZone();
 
-	if( iI )
-	{
+	if(iI) {
 		dy    =    iDepY - MenuAllZone.GetZoneNum(0)->rZone.top;
-	}
-
-	//We can't go inside the for-loop
-	else
-	{
+	}else {
+		//We can't go inside the for-loop
 		arx_assert( !( 0 < iI ) );
 	}
 
-	for( int iJ = 0 ; iJ < iI ; iJ++ )
-	{
+	for(int iJ = 0; iJ < iI; iJ++) {
 		CMenuZone *pZone    =    MenuAllZone.GetZoneNum(iJ);
 		iDy                    =    pZone->rZone.bottom - pZone->rZone.top;
 		iDepY                +=    iDy + iInterligne;
@@ -3152,57 +2830,46 @@ void CWindowMenuConsole::AddMenuCenterY( CMenuElement * _pMenuElement )
 	MenuAllZone.AddZone( (CMenuZone*) _pMenuElement );
 }
 
-//-----------------------------------------------------------------------------
+void CWindowMenuConsole::AddMenuCenter(CMenuElement * _pMenuElement) {
 
-void CWindowMenuConsole::AddMenuCenter( CMenuElement * _pMenuElement )
-{
 	_pMenuElement->ePlace    =    CENTER;
 
-	int    iDx    =    _pMenuElement->rZone.right - _pMenuElement->rZone.left;
-	int    dx    =    ( ( iWidth - iDx ) >> 1 ) - _pMenuElement->rZone.left;
+	int iDx = _pMenuElement->rZone.right - _pMenuElement->rZone.left;
+	int dx  = ((iWidth - iDx) >> 1) - _pMenuElement->rZone.left;
 
-	if( dx < 0 )
-	{
+	if(dx < 0) {
 		dx = 0;
 	}
 
-	int    iDy    =    _pMenuElement->rZone.bottom - _pMenuElement->rZone.top;
-	int    iI    =    MenuAllZone.GetNbZone();
+	int iDy = _pMenuElement->rZone.bottom - _pMenuElement->rZone.top;
+	int iI  = MenuAllZone.GetNbZone();
 
-	for( int iJ = 0 ; iJ < iI ; iJ++ )
-	{
-		iDy    +=    iInterligne;
-		CMenuZone *pZone    =    MenuAllZone.GetZoneNum(iJ);
-		iDy    +=    pZone->rZone.bottom - pZone->rZone.top;
+	for(int iJ = 0; iJ < iI; iJ++) {
+		CMenuZone *pZone = MenuAllZone.GetZoneNum(iJ);
+
+		iDy += iInterligne;
+		iDy += pZone->rZone.bottom - pZone->rZone.top;
 	}
 
 	int iDepY;
 
-	if( iDy < iHeight )
-	{
-		iDepY    =    iOY + ( ( iHeight - iDy ) >> 1 );
-	}
-	else
-	{
-		iDepY    =    iOY;
+	if(iDy < iHeight ) {
+		iDepY = iOY + ( ( iHeight - iDy ) >> 1 );
+	} else {
+		iDepY = iOY;
 	}
 
 	int dy = 0;
 	iI = MenuAllZone.GetNbZone();
 
-	if( iI )
-	{
-		dy    =    iDepY - MenuAllZone.GetZoneNum(0)->rZone.top;
-	}
-
-	//We can't go inside the for-loop
-	else
-	{
+	if(iI) {
+		dy = iDepY - MenuAllZone.GetZoneNum(0)->rZone.top;
+	} else {
+		//We can't go inside the for-loop
 		arx_assert( !( 0 < iI ) );
 	}
 
-	for( int iJ = 0 ; iJ < iI ; iJ++ )
-	{
+	for(int iJ = 0; iJ < iI; iJ++) {
 		CMenuZone *pZone = MenuAllZone.GetZoneNum( iJ );
 		iDepY += pZone->rZone.bottom - pZone->rZone.top + iInterligne;
 		pZone->Move( 0, dy );
@@ -3212,8 +2879,6 @@ void CWindowMenuConsole::AddMenuCenter( CMenuElement * _pMenuElement )
 
 	MenuAllZone.AddZone( (CMenuZone*) _pMenuElement );
 }
-
-//-----------------------------------------------------------------------------
 
 void CWindowMenuConsole::AlignElementCenter(CMenuElement *_pMenuElement) {
 	
@@ -3226,21 +2891,18 @@ void CWindowMenuConsole::AlignElementCenter(CMenuElement *_pMenuElement) {
 	_pMenuElement->Move(std::max(dx, 0), 0);
 }
 
-//-----------------------------------------------------------------------------
+void CWindowMenuConsole::UpdateText() {
 
-void CWindowMenuConsole::UpdateText()
-{
-	if(GInput->isAnyKeyPressed())
-	{
-		if( (GInput->isKeyPressed(Keyboard::Key_Enter)) ||
-			(GInput->isKeyPressed(Keyboard::Key_NumPadEnter)) ||
-			(GInput->isKeyPressed(Keyboard::Key_Escape)) )
-		{
+	if(GInput->isAnyKeyPressed()) {
+
+		if(GInput->isKeyPressed(Keyboard::Key_Enter)
+		   || GInput->isKeyPressed(Keyboard::Key_NumPadEnter)
+		   || GInput->isKeyPressed(Keyboard::Key_Escape)
+		) {
 			ARX_SOUND_PlayMenu(SND_MENU_CLICK);
 			((CMenuElementText*)pZoneClick)->eState=EDIT;
 
-			if( ((CMenuElementText*)pZoneClick)->lpszText.empty() )
-			{
+			if(((CMenuElementText*)pZoneClick)->lpszText.empty()) {
 				std::string szMenuText;
 				szMenuText = getLocalised("system_menu_editquest_newsavegame");
 
@@ -3248,12 +2910,10 @@ void CWindowMenuConsole::UpdateText()
 
 				int iDx=pZoneClick->rZone.right-pZoneClick->rZone.left;
 
-				if(pZoneClick->ePlace)
-				{
+				if(pZoneClick->ePlace) {
 					pZoneClick->rZone.left=iPosX+((iWidth-iDx)>>1);
 
-					if(pZoneClick->rZone.left<0)
-					{
+					if(pZoneClick->rZone.left < 0) {
 						pZoneClick->rZone.left=0;
 					}
 				}
@@ -3271,44 +2931,36 @@ void CWindowMenuConsole::UpdateText()
 		
 		CMenuElementText *pZoneText=(CMenuElementText*)pZoneClick;
 
-		if(GInput->isKeyPressedNowPressed(Keyboard::Key_Backspace))
-		{
+		if(GInput->isKeyPressedNowPressed(Keyboard::Key_Backspace)) {
 			tText = pZoneText->lpszText;
 
-			if( !tText.empty() )
-			{
+			if(!tText.empty()) {
 				tText.resize(tText.size() - 1);
 				bKey=true;
 			}
-		}
-		else
-		{
+		} else {
 			int iKey = GInput->getKeyPressed();
 			iKey&=0xFFFF;
 
-			if(GInput->isKeyPressedNowPressed(iKey))
-			{
+			if(GInput->isKeyPressedNowPressed(iKey)) {
 				tText = pZoneText->lpszText;
 
 				char tCat;
 				
 				bKey = GInput->getKeyAsText(iKey, tCat);
 
-				if(bKey)
-				{
+				if(bKey) {
 					int iChar = tCat & 0x000000FF; // To prevent ascii chars between [128, 255] from causing an assertion in the functions below...
-					if ((isalnum(iChar) || isspace(iChar) || ispunct(iChar)) && (tCat != '\t') && (tCat != '*'))
+					if((isalnum(iChar) || isspace(iChar) || ispunct(iChar)) && (tCat != '\t') && (tCat != '*'))
 						tText += tCat;
 				}
 			}
 		}
 
-		if(bKey)
-		{
+		if(bKey) {
 			pZoneText->SetText(tText);
 
-			if(    (pZoneText->rZone.right-pZoneText->rZone.left)>(iWidth-RATIO_X(64)) )
-			{
+			if(pZoneText->rZone.right - pZoneText->rZone.left > iWidth - RATIO_X(64)) {
 				if(!tText.empty()) {
 					tText.resize(tText.size() - 1);
 					pZoneText->SetText(tText);
@@ -3317,12 +2969,10 @@ void CWindowMenuConsole::UpdateText()
 
 			int iDx=pZoneClick->rZone.right-pZoneClick->rZone.left;
 
-			if(pZoneClick->ePlace)
-			{
+			if(pZoneClick->ePlace) {
 				pZoneClick->rZone.left=iPosX+((iWidth-iDx)>>1);
 
-				if(pZoneClick->rZone.left<0)
-				{
+				if(pZoneClick->rZone.left < 0) {
 					pZoneClick->rZone.left=0;
 				}
 			}
@@ -3331,8 +2981,7 @@ void CWindowMenuConsole::UpdateText()
 		}
 	}
 
-	if (pZoneClick->rZone.top == pZoneClick->rZone.bottom)
-	{
+	if(pZoneClick->rZone.top == pZoneClick->rZone.bottom) {
 		Vec2i textSize = ((CMenuElementText*)pZoneClick)->pFont->getTextSize("|");
 		pZoneClick->rZone.bottom += textSize.y;
 	}
@@ -3353,10 +3002,9 @@ void CWindowMenuConsole::UpdateText()
 	v[2].p.y = (float)pZoneClick->rZone.bottom;
 	v[3].p.x = v[1].p.x;
 	v[3].p.y = v[2].p.y;
+
 	EERIEDRAWPRIM(Renderer::TriangleStrip, v, 4);
 }
-
-//-----------------------------------------------------------------------------
 
 CMenuElement * CWindowMenuConsole::GetTouch(bool keyTouched, int keyId, InputKeyId* pInputKeyId, bool _bValidateTest)
 {
@@ -3366,39 +3014,32 @@ CMenuElement * CWindowMenuConsole::GetTouch(bool keyTouched, int keyId, InputKey
 		*pInputKeyId = keyId;
 
 	if(keyTouched || (iMouseButton & (Mouse::ButtonBase | Mouse::WheelBase))) {
-		if(!keyTouched && !bMouseAttack)
-		{
+		if(!keyTouched && !bMouseAttack) {
 			bMouseAttack=!bMouseAttack;
 			return NULL;
 		}
 
 		CMenuElementText *pZoneText=(CMenuElementText*)pZoneClick;
 
-		if(_bValidateTest)
-		{
-			if( (pZoneClick->iID==BUTTON_MENUOPTIONS_CONTROLS_CUST_ACTIONCOMBINE1)||
-				(pZoneClick->iID==BUTTON_MENUOPTIONS_CONTROLS_CUST_ACTIONCOMBINE2))
+		if(_bValidateTest) {
+			if(pZoneClick->iID == BUTTON_MENUOPTIONS_CONTROLS_CUST_ACTIONCOMBINE1 ||
+			   pZoneClick->iID == BUTTON_MENUOPTIONS_CONTROLS_CUST_ACTIONCOMBINE2)
 			{
 				bool bOk=true;
 
-				if(  (iMouseButton & Mouse::ButtonBase)&&
-					!(iMouseButton & Mouse::WheelBase) )
-				{
+				if((iMouseButton & Mouse::ButtonBase) && !(iMouseButton & Mouse::WheelBase)) {
 					bOk=false;
-				}
-				else
-				{
-					for(int buttonId = Mouse::ButtonBase; buttonId < Mouse::ButtonMax; buttonId++)
-					{
-						if(keyId == buttonId)
-						{
+				} else {
+					for(int buttonId = Mouse::ButtonBase; buttonId < Mouse::ButtonMax; buttonId++) {
+						if(keyId == buttonId) {
 							bOk=false;
 							break;
 						}
 					}
 				}
 
-				if(bOk) return NULL;
+				if(bOk)
+					return NULL;
 			}
 		}
 
@@ -3408,8 +3049,7 @@ CMenuElement * CWindowMenuConsole::GetTouch(bool keyTouched, int keyId, InputKey
 		else
 			pText = GInput->getKeyName(keyId, true);
 
-		if ( !pText.empty() )
-		{
+		if(!pText.empty()) {
 			pZoneText->lColorHighlight=pZoneText->lOldColor;
 
 			pZoneText->eState=GETTOUCH;
@@ -3417,12 +3057,10 @@ CMenuElement * CWindowMenuConsole::GetTouch(bool keyTouched, int keyId, InputKey
 			
 			int iDx=pZoneClick->rZone.right-pZoneClick->rZone.left;
 
-			if(pZoneClick->ePlace)
-			{
+			if(pZoneClick->ePlace) {
 				pZoneClick->rZone.left=(iWidth-iDx)>>1;
 
-				if(pZoneClick->rZone.left<0)
-				{
+				if(pZoneClick->rZone.left < 0) {
 					pZoneClick->rZone.left=0;
 				}
 			}
@@ -3432,8 +3070,7 @@ CMenuElement * CWindowMenuConsole::GetTouch(bool keyTouched, int keyId, InputKey
 			pZoneClick=NULL;
 			bEdit=false;
 
-			if(iMouseButton & (Mouse::ButtonBase | Mouse::WheelBase))
-			{
+			if(iMouseButton & (Mouse::ButtonBase | Mouse::WheelBase)) {
 				if(pInputKeyId)
 					*pInputKeyId = iMouseButton;
 			}
@@ -3442,23 +3079,19 @@ CMenuElement * CWindowMenuConsole::GetTouch(bool keyTouched, int keyId, InputKey
 
 			return (CMenuElement*)pZoneText;
 		}
-
 	}
 
 	return NULL;
 }
 
-//-----------------------------------------------------------------------------
+MENUSTATE CWindowMenuConsole::Update(int _iPosX, int _iPosY, int _iOffsetY) {
 
-MENUSTATE CWindowMenuConsole::Update(int _iPosX,int _iPosY,int _iOffsetY)
-{
 	bFrameOdd=!bFrameOdd;
 
 	iSavePosY=_iPosY;
 
 	//move les zones
-	if(_iOffsetY)
-	{
+	if(_iOffsetY) {
 		_iPosY-=(MenuAllZone.GetZoneNum(_iOffsetY)->rZone.top)-(MenuAllZone.GetZoneNum(0)->rZone.top);
 	}
 
@@ -3466,17 +3099,12 @@ MENUSTATE CWindowMenuConsole::Update(int _iPosX,int _iPosY,int _iOffsetY)
 
 	int iI = MenuAllZone.GetNbZone();
 
-	for(int iJ=0;iJ<iI;++iJ)
-	{
+	for(int iJ = 0; iJ < iI; ++iJ) {
 		CMenuZone *pZone = MenuAllZone.GetZoneNum(iJ);
 
-		if(    (pZone->rZone.top<iSavePosY)||
-			((pZone->rZone.bottom+iInterligne)>(iSavePosY+iHeight)))
-		{
+		if(pZone->rZone.top < iSavePosY || pZone->rZone.bottom + iInterligne > iSavePosY + iHeight) {
 			pZone->bActif=false;
-		}
-		else
-		{
+		} else {
 			pZone->bActif=true;
 		}
 
@@ -3489,22 +3117,19 @@ MENUSTATE CWindowMenuConsole::Update(int _iPosX,int _iPosY,int _iOffsetY)
 	iPosY=_iPosY;
 
 	// Check if mouse over
-	if (bMouseListen)
-	{
-		if (!bEdit)
-		{
+	if(bMouseListen) {
+		if(!bEdit) {
 			pZoneClick=NULL;
 			CMenuZone * iR = MenuAllZone.CheckZone(GInput->getMousePosAbs());
 
 			if(iR) {
 				pZoneClick=(CMenuElement*)iR;
 
-				if( GInput->getMouseButtonDoubleClick(Mouse::Button_0,300) )
-				{
+				if(GInput->getMouseButtonDoubleClick(Mouse::Button_0, 300)) {
 					MENUSTATE e = pZoneClick->eMenuState;
 					bEdit = pZoneClick->OnMouseDoubleClick(0);
 
-					if (pZoneClick->iID == BUTTON_MENUEDITQUEST_LOAD)
+					if(pZoneClick->iID == BUTTON_MENUEDITQUEST_LOAD)
 						return MAIN;
 
 					if(bEdit)
@@ -3513,29 +3138,22 @@ MENUSTATE CWindowMenuConsole::Update(int _iPosX,int _iPosY,int _iOffsetY)
 					return e;
 				}
 
-				if( GInput->getMouseButton(Mouse::Button_0) )
-				{
+				if(GInput->getMouseButton(Mouse::Button_0)) {
 					MENUSTATE e = pZoneClick->eMenuState;
 					bEdit = pZoneClick->OnMouseClick(0);
 					return e;
-				}
-				else
-				{
+				} else {
 					pZoneClick->EmptyFunction();
 				}
 			}
-		}
-		else
-		{
-			if(!pZoneClick)
-			{
+		} else {
+			if(!pZoneClick) {
 				CMenuZone * iR = MenuAllZone.CheckZone(GInput->getMousePosAbs());
 
 				if(iR) {
 					pZoneClick=(CMenuElement*)iR;
 
-					if( GInput->getMouseButtonDoubleClick(Mouse::Button_0,300) )
-					{
+					if(GInput->getMouseButtonDoubleClick(Mouse::Button_0, 300)) {
 						bEdit = pZoneClick->OnMouseDoubleClick(0);
 
 						if(bEdit)
@@ -3547,17 +3165,14 @@ MENUSTATE CWindowMenuConsole::Update(int _iPosX,int _iPosY,int _iOffsetY)
 	}
 
 	//check les shortcuts
-	if(!bEdit)
-	{
+	if(!bEdit) {
 		iI=MenuAllZone.GetNbZone();
 
-		for(int iJ=0;iJ<iI;++iJ)
-		{
+		for(int iJ = 0; iJ < iI; ++iJ) {
 			CMenuElement *pMenuElement=(CMenuElement*)MenuAllZone.GetZoneNum(iJ);
 			CMenuElement *CMenuElementShortCut = pMenuElement->OnShortCut();
 
-			if(CMenuElementShortCut)
-			{
+			if(CMenuElementShortCut) {
 				pZoneClick=CMenuElementShortCut;
 				MENUSTATE e = pZoneClick->eMenuState;
 				bEdit = pZoneClick->OnMouseClick(0);
@@ -3565,22 +3180,16 @@ MENUSTATE CWindowMenuConsole::Update(int _iPosX,int _iPosY,int _iOffsetY)
 				return e;
 			}
 		}
-		}
+	}
 
 	return NOP;
 }
 
-//-----------------------------------------------------------------------------
-
-static bool UpdateGameKey(bool bEdit, CMenuElement *pmeElement, InputKeyId inputKeyId)
-{
+static bool UpdateGameKey(bool bEdit, CMenuElement *pmeElement, InputKeyId inputKeyId) {
 	bool bChange=false;
 
-	if(    (!bEdit)&&
-		(pmeElement) )
-	{
-		switch(pmeElement->iID)
-		{
+	if(!bEdit && pmeElement) {
+		switch(pmeElement->iID) {
 		case BUTTON_MENUOPTIONS_CONTROLS_CUST_JUMP1:
 		case BUTTON_MENUOPTIONS_CONTROLS_CUST_JUMP2:
 			bChange=config.setActionKey(CONTROLS_CUST_JUMP,pmeElement->iID-BUTTON_MENUOPTIONS_CONTROLS_CUST_JUMP1,inputKeyId);
@@ -3621,9 +3230,9 @@ static bool UpdateGameKey(bool bEdit, CMenuElement *pmeElement, InputKeyId input
 		case BUTTON_MENUOPTIONS_CONTROLS_CUST_CROUCH2:
 			bChange=config.setActionKey(CONTROLS_CUST_CROUCH,pmeElement->iID-BUTTON_MENUOPTIONS_CONTROLS_CUST_CROUCH1,inputKeyId);
 			break;
-		case BUTTON_MENUOPTIONS_CONTROLS_CUST_MOUSELOOK1:
-		case BUTTON_MENUOPTIONS_CONTROLS_CUST_MOUSELOOK2:
-			bChange=config.setActionKey(CONTROLS_CUST_MOUSELOOK,pmeElement->iID-BUTTON_MENUOPTIONS_CONTROLS_CUST_MOUSELOOK1,inputKeyId);
+		case BUTTON_MENUOPTIONS_CONTROLS_CUST_USE1:
+		case BUTTON_MENUOPTIONS_CONTROLS_CUST_USE2:
+			bChange=config.setActionKey(CONTROLS_CUST_USE,pmeElement->iID-BUTTON_MENUOPTIONS_CONTROLS_CUST_USE1,inputKeyId);
 			break;
 		case BUTTON_MENUOPTIONS_CONTROLS_CUST_ACTIONCOMBINE1:
 		case BUTTON_MENUOPTIONS_CONTROLS_CUST_ACTIONCOMBINE2:
@@ -3751,11 +3360,10 @@ static bool UpdateGameKey(bool bEdit, CMenuElement *pmeElement, InputKeyId input
 	return bChange;
 }
 
-//-----------------------------------------------------------------------------
+int CWindowMenuConsole::Render() {
 
-int CWindowMenuConsole::Render()
-{
-	if(bNoMenu) return 0;
+	if(bNoMenu)
+		return 0;
 
 	int iSlider=0;
 
@@ -3784,35 +3392,28 @@ int CWindowMenuConsole::Render()
 
 	int iARXDiffTimeMenu  = checked_range_cast<int>(ARXDiffTimeMenu);
 
-	for(int i=0;i<t;++i)
-	{
+	for(int i = 0; i < t; ++i) {
 		CMenuElement *pMe=(CMenuElement*)MenuAllZone.GetZoneNum(i);
 
-		if(pMe->bActif)
-		{
+		if(pMe->bActif) {
 			pMe->Update(iARXDiffTimeMenu);
 			pMe->Render();
-		}
-		else
-		{
+		} else {
 			iSlider++;
 		}
 	}
 
 	//HIGHLIGHT
-	if(pZoneClick && pZoneClick->bActif)
-	{
+	if(pZoneClick && pZoneClick->bActif) {
 		bool bReInit=false;
 
 		pZoneClick->RenderMouseOver();
 
-		switch(pZoneClick->eState)
-		{
+		switch(pZoneClick->eState) {
 		case EDIT_TIME:
 			UpdateText();
 			break;
-		case GETTOUCH_TIME:
-			{
+		case GETTOUCH_TIME: {
 				if(bFrameOdd)
 					((CMenuElementText*)pZoneClick)->lColorHighlight = Color(255, 0, 0);
 				else
@@ -3826,45 +3427,37 @@ int CWindowMenuConsole::Render()
 					GInput->isKeyPressed(Keyboard::Key_LeftCtrl)||
 					GInput->isKeyPressed(Keyboard::Key_RightCtrl)||
 					GInput->isKeyPressed(Keyboard::Key_LeftAlt)||
-					GInput->isKeyPressed(Keyboard::Key_RightAlt) )
-				{
+					GInput->isKeyPressed(Keyboard::Key_RightAlt)
+				) {
 					if(!((keyId & INPUT_COMBINATION_MASK )>>16))
 						keyTouched = false;
-				}
-				else
-				{
-					if(GInput->isKeyPressedNowUnPressed(Keyboard::Key_LeftShift))
-					{
+				} else {
+					if(GInput->isKeyPressedNowUnPressed(Keyboard::Key_LeftShift)) {
 						keyTouched = true;
 						keyId = Keyboard::Key_LeftShift;
 					}
 
-					if(GInput->isKeyPressedNowUnPressed(Keyboard::Key_RightShift))
-					{
+					if(GInput->isKeyPressedNowUnPressed(Keyboard::Key_RightShift)) {
 						keyTouched = true;
 						keyId = Keyboard::Key_RightShift;
 					}
 
-					if(GInput->isKeyPressedNowUnPressed(Keyboard::Key_LeftCtrl))
-					{
+					if(GInput->isKeyPressedNowUnPressed(Keyboard::Key_LeftCtrl)) {
 						keyTouched = true;
 						keyId = Keyboard::Key_LeftCtrl;
 					}
 
-					if(GInput->isKeyPressedNowUnPressed(Keyboard::Key_RightCtrl))
-					{
+					if(GInput->isKeyPressedNowUnPressed(Keyboard::Key_RightCtrl)) {
 						keyTouched = true;
 						keyId = Keyboard::Key_RightCtrl;
 					}
 
-					if(GInput->isKeyPressedNowUnPressed(Keyboard::Key_LeftAlt))
-					{
+					if(GInput->isKeyPressedNowUnPressed(Keyboard::Key_LeftAlt)) {
 						keyTouched = true;
 						keyId = Keyboard::Key_LeftAlt;
 					}
 
-					if(GInput->isKeyPressedNowUnPressed(Keyboard::Key_RightAlt))
-					{
+					if(GInput->isKeyPressedNowUnPressed(Keyboard::Key_RightAlt)) {
 						keyTouched = true;
 						keyId = Keyboard::Key_RightAlt;
 					}
@@ -3873,10 +3466,8 @@ int CWindowMenuConsole::Render()
 				InputKeyId inputKeyId;
 				CMenuElement *pmeElement = GetTouch(keyTouched, keyId, &inputKeyId, true);
 
-				if(pmeElement)
-				{
-					if(UpdateGameKey(bEdit,pmeElement, inputKeyId))
-					{
+				if(pmeElement) {
+					if(UpdateGameKey(bEdit,pmeElement, inputKeyId)) {
 						bReInit=true;
 					}
 				}
@@ -3884,12 +3475,10 @@ int CWindowMenuConsole::Render()
 			break;
 		default:
 			{
-				if(GInput->getMouseButtonNowPressed(Mouse::Button_0))
-				{
+				if(GInput->getMouseButtonNowPressed(Mouse::Button_0)) {
 					CMenuZone *pmzMenuZone = MenuAllZone.GetZoneWithID(BUTTON_MENUOPTIONS_CONTROLS_CUST_DEFAULT);
 
-					if(pmzMenuZone==pZoneClick)
-					{
+					if(pmzMenuZone==pZoneClick) {
 						config.setDefaultActionKeys();
 						bReInit=true;
 					}
@@ -3898,8 +3487,7 @@ int CWindowMenuConsole::Render()
 			break;
 		}
 
-		if(bReInit)
-		{
+		if(bReInit) {
 			ReInitActionKey();
 			bMouseAttack=false;
 		}
@@ -3916,24 +3504,20 @@ void CWindowMenuConsole::ReInitActionKey()
 	int iID=BUTTON_MENUOPTIONS_CONTROLS_CUST_JUMP1;
 	int iI=NUM_ACTION_KEY;
 	
-	while(iI--)
-	{
+	while(iI--) {
 		int iTab=(iID-BUTTON_MENUOPTIONS_CONTROLS_CUST_JUMP1)>>1;
 
 		CMenuZone *pmzMenuZone = MenuAllZone.GetZoneWithID(iID);
 
-		if (pmzMenuZone)
-		{
-			if(pmzMenuZone)
-			{
+		if(pmzMenuZone) {
+			if(pmzMenuZone) {
 				pZoneClick = (CMenuElement*)pmzMenuZone;
 				GetTouch(true, config.actions[iTab].key[0]);
 			}
 
 			pmzMenuZone = MenuAllZone.GetZoneWithID(iID+1);
 
-			if( pmzMenuZone )
-			{
+			if(pmzMenuZone) {
 				pZoneClick = (CMenuElement*)pmzMenuZone;
 				GetTouch(true, config.actions[iTab].key[1]);
 			}
@@ -3943,25 +3527,18 @@ void CWindowMenuConsole::ReInitActionKey()
 	}
 }
 
-//-----------------------------------------------------------------------------
-
 CMenuPanel::CMenuPanel()
-: CMenuElement(NOP)
+	: CMenuElement(NOP)
 {
 	vElement.clear();
-
 	pRef = this;
 }
 
-//-----------------------------------------------------------------------------
-
 CMenuPanel::~CMenuPanel()
 {
-	for (std::vector<CMenuElement*>::iterator it = vElement.begin(), it_end = vElement.end(); it != it_end; ++it)
+	for(std::vector<CMenuElement*>::iterator it = vElement.begin(), it_end = vElement.end(); it != it_end; ++it)
 		delete (*it);
 }
-
-//-----------------------------------------------------------------------------
 
 void CMenuPanel::Move(int _iX, int _iY)
 {
@@ -3970,20 +3547,18 @@ void CMenuPanel::Move(int _iX, int _iY)
 	rZone.right += _iX;
 	rZone.bottom += _iY;
 
-	for (std::vector<CMenuElement*>::iterator it = vElement.begin(), it_end = vElement.end(); it != it_end; ++it)
+	for(std::vector<CMenuElement*>::iterator it = vElement.begin(), it_end = vElement.end(); it != it_end; ++it)
 		(*it)->Move(_iX, _iY);
 }
 
-//-----------------------------------------------------------------------------
 // patch on ajoute à droite en ligne
 void CMenuPanel::AddElement(CMenuElement* _pElem)
 {
 	vElement.push_back(_pElem);
 
-	if (vElement.size() == 1)
+	if(vElement.size() == 1) {
 		rZone = _pElem->rZone;
-	else
-	{
+	} else {
 		rZone.left = std::min(rZone.left, _pElem->rZone.left);
 		rZone.top = std::min(rZone.top, _pElem->rZone.top);
 	}
@@ -3995,16 +3570,14 @@ void CMenuPanel::AddElement(CMenuElement* _pElem)
 	_pElem->Move(0, ((GetHeight() - _pElem->rZone.bottom) / 2));
 }
 
-//-----------------------------------------------------------------------------
 // patch on ajoute à droite en ligne
 void CMenuPanel::AddElementNoCenterIn(CMenuElement* _pElem)
 {
 	vElement.push_back(_pElem);
 
-	if (vElement.size() == 1)
-		rZone=_pElem->rZone;
-	else
-	{
+	if(vElement.size() == 1) {
+		rZone = _pElem->rZone;
+	} else {
 		rZone.left = std::min(rZone.left, _pElem->rZone.left);
 		rZone.top = std::min(rZone.top, _pElem->rZone.top);
 	}
@@ -4012,85 +3585,71 @@ void CMenuPanel::AddElementNoCenterIn(CMenuElement* _pElem)
 	// + taille elem
 	rZone.right = std::max(rZone.right, _pElem->rZone.right);
 	rZone.bottom = std::max(rZone.bottom, _pElem->rZone.bottom);
-
 }
-
-//-----------------------------------------------------------------------------
 
 CMenuElement* CMenuPanel::OnShortCut()
 {
-	for (std::vector<CMenuElement*>::iterator it = vElement.begin(), it_end = vElement.end(); it != it_end; ++it)
-		if ((*it)->OnShortCut())
+	for(std::vector<CMenuElement*>::iterator it = vElement.begin(), it_end = vElement.end(); it != it_end; ++it)
+		if((*it)->OnShortCut())
 			return *it;
 
 	return NULL;
 }
-
-//-----------------------------------------------------------------------------
 
 void CMenuPanel::Update(int _iTime)
 {
 	rZone.right = rZone.left;
 	rZone.bottom = rZone.top;
 
-	;
-
-	for (std::vector<CMenuElement*>::iterator it = vElement.begin(), it_end = vElement.end(); it != it_end; ++it)
-	{
+	for(std::vector<CMenuElement*>::iterator it = vElement.begin(), it_end = vElement.end(); it != it_end; ++it) {
 		(*it)->Update(_iTime);
 		rZone.right = std::max(rZone.right, (*it)->rZone.right);
 		rZone.bottom = std::max(rZone.bottom, (*it)->rZone.bottom);
 	}
 }
 
-//-----------------------------------------------------------------------------
+void CMenuPanel::Render() {
 
-void CMenuPanel::Render()
-{
-	if(bNoMenu) return;
+	if(bNoMenu)
+		return;
 
-	for (std::vector<CMenuElement*>::iterator it = vElement.begin(), it_end = vElement.end(); it != it_end; ++it)
+	for(std::vector<CMenuElement*>::iterator it = vElement.begin(), it_end = vElement.end(); it != it_end; ++it)
 		(*it)->Render();
 }
 
-//-----------------------------------------------------------------------------
-
 CMenuZone * CMenuPanel::GetZoneWithID(int _iID)
 {
-	for (std::vector<CMenuElement*>::iterator it = vElement.begin(), it_end = vElement.end(); it != it_end; ++it)
-		if (CMenuZone* pZone = (*it)->GetZoneWithID(_iID))
+	for(std::vector<CMenuElement*>::iterator it = vElement.begin(), it_end = vElement.end(); it != it_end; ++it)
+		if(CMenuZone* pZone = (*it)->GetZoneWithID(_iID))
 			return pZone;
 
 	return NULL;
 }
 
-//-----------------------------------------------------------------------------
+CMenuZone * CMenuPanel::IsMouseOver(const Vec2s& mousePos) const {
 
-CMenuZone * CMenuPanel::IsMouseOver(const Vec2s& mousePos) const
-{
-	if ((mousePos.x >= rZone.left) &&
-		(mousePos.y >= rZone.top) &&
-		(mousePos.x <= rZone.right) &&
-		(mousePos.y <= rZone.bottom))
-	{
+	if(mousePos.x >= rZone.left
+	   && mousePos.y >= rZone.top
+	   && mousePos.x <= rZone.right
+	   && mousePos.y <= rZone.bottom
+	) {
 		vector<CMenuElement *>::const_iterator i;
 		
-		for(i=vElement.begin();i!=vElement.end();++i)
-		{
-			if ((*i)->bCheck &&
-				(*i)->bActif && 
-				(mousePos.x >= (*i)->rZone.left) &&
-				(mousePos.y >= (*i)->rZone.top) &&
-				(mousePos.x <= (*i)->rZone.right) &&
-				(mousePos.y <= (*i)->rZone.bottom))
+		for(i = vElement.begin(); i != vElement.end(); ++i) {
+			if((*i)->bCheck
+			   && (*i)->bActif
+			   && mousePos.x >= (*i)->rZone.left
+			   && mousePos.y >= (*i)->rZone.top
+			   && mousePos.x <= (*i)->rZone.right
+			   && mousePos.y <= (*i)->rZone.bottom
+			) {
 				return (*i)->pRef;
+			}
 		}
 	}
 
 	return NULL;
 }
-
-//-----------------------------------------------------------------------------
 
 CMenuButton::CMenuButton(int _iID, Font* _pFont,MENUSTATE _eMenuState,int _iPosX,int _iPosY, const std::string& _pText,float _fSize,TextureContainer *_pTex,TextureContainer *_pTexOver,int _iColor)
 	: CMenuElement(_eMenuState)
@@ -4107,14 +3666,12 @@ CMenuButton::CMenuButton(int _iID, Font* _pFont,MENUSTATE _eMenuState,int _iPosX
 	vText.clear();
 	iPos=0;
 
-	if( !_pText.empty() )
-	{
+	if(!_pText.empty()) {
 		AddText(_pText);
 	}
 
 	pTex=_pTex;
 	pTexOver=_pTexOver;
-
 
 	if(pTex) {
 		float rZoneR = rZone.left + RATIO_X(pTex->m_dwWidth);
@@ -4135,12 +3692,8 @@ CMenuButton::CMenuButton(int _iID, Font* _pFont,MENUSTATE _eMenuState,int _iPosX
 	pRef=this;
 }
 
-//-----------------------------------------------------------------------------
-
 CMenuButton::~CMenuButton() {
 }
-
-//-----------------------------------------------------------------------------
 
 void CMenuButton::SetPos(float _iX,float _iY)
 {
@@ -4164,11 +3717,9 @@ void CMenuButton::SetPos(float _iX,float _iY)
 	rZone.bottom = static_cast<int>(_iY) + max(iHeight, iHeight2);
 }
 
-//-----------------------------------------------------------------------------
-
-void CMenuButton::AddText( const std::string& _pText)
+void CMenuButton::AddText(const std::string & _pText)
 {
-	if ( _pText.empty() )
+	if(_pText.empty())
 		return;
 
 	vText += _pText;
@@ -4178,8 +3729,11 @@ void CMenuButton::AddText( const std::string& _pText)
 	
 	Vec2i textSize = pFont->getTextSize(_pText);
 
-	if(textSize.x>iSizeXButton) iSizeXButton=textSize.x;
-	if(textSize.y>iSizeYButton) iSizeYButton=textSize.y;
+	if(textSize.x>iSizeXButton)
+		iSizeXButton=textSize.x;
+
+	if(textSize.y>iSizeYButton)
+		iSizeYButton=textSize.y;
 
 	rZone.right=rZone.left+iSizeXButton;
 	rZone.bottom=rZone.top+iSizeYButton;
@@ -4205,17 +3759,14 @@ bool CMenuButton::OnMouseClick(int _iMouseButton) {
 	return false;
 }
 
-//-----------------------------------------------------------------------------
-
 void CMenuButton::Update(int _iDTime) {
 	(void)_iDTime;
 }
 
-//-----------------------------------------------------------------------------
+void CMenuButton::Render() {
 
-void CMenuButton::Render()
-{
-	if(bNoMenu) return;
+	if(bNoMenu)
+		return;
 
 	//affichage de la texture
 	if(pTex) {
@@ -4224,8 +3775,7 @@ void CMenuButton::Render()
 	}
 
 	//affichage de la font
-	if(vText.size())
-	{
+	if(vText.size()) {
 		char pText = vText[iPos];
 
 		GRenderer->SetRenderState(Renderer::AlphaBlending, true);
@@ -4242,17 +3792,15 @@ void CMenuButton::Render()
 	}
 }
 
-//-----------------------------------------------------------------------------
+void CMenuButton::RenderMouseOver() {
 
-void CMenuButton::RenderMouseOver()
-{
-	if(bNoMenu) return;
+	if(bNoMenu)
+		return;
 
 	pMenuCursor->SetMouseOver();
 
 	//affichage de la texture
-	if(pTexOver)
-	{
+	if(pTexOver) {
 		TexturedVertex v[4];
 		v[0].color = v[1].color = v[2].color = v[3].color = Color::white.toBGR();
 		v[0].p.z=v[1].p.z=v[2].p.z=v[3].p.z=0.f;
@@ -4278,8 +3826,7 @@ void CMenuButton::RenderMouseOver()
 		EERIEDRAWPRIM(Renderer::TriangleStrip, v, 4);
 	}
 
-	if( vText.size() )
-	{
+	if(vText.size()) {
 		char pText=vText[iPos];
 
 		GRenderer->SetRenderState(Renderer::AlphaBlending, true);
@@ -4295,8 +3842,6 @@ void CMenuButton::RenderMouseOver()
 		GRenderer->SetRenderState(Renderer::AlphaBlending, false);
 	}
 }
-
-//-----------------------------------------------------------------------------
 
 CMenuSliderText::CMenuSliderText(int _iID, int _iPosX, int _iPosY)
 	: CMenuElement(NOP)
@@ -4337,8 +3882,7 @@ void CMenuSliderText::SetWidth(int _iWidth) {
 	//on recentre tout
 	vector<CMenuElementText*>::iterator it;
 
-	for(it=vText.begin();it<vText.end();++it)
-	{
+	for(it = vText.begin(); it < vText.end(); ++it) {
 		CMenuElementText *pMenuElementText=*it;
 		Vec2i textSize = pMenuElementText->GetTextSize();
 
@@ -4347,10 +3891,7 @@ void CMenuSliderText::SetWidth(int _iWidth) {
 	}
 }
 
-//-----------------------------------------------------------------------------
-
-void CMenuSliderText::AddText(CMenuElementText *_pText)
-{
+void CMenuSliderText::AddText(CMenuElementText *_pText) {
 	
 	_pText->setEnabled(enabled);
 	
@@ -4369,8 +3910,7 @@ void CMenuSliderText::AddText(CMenuElementText *_pText)
 	//on recentre tout
 	vector<CMenuElementText*>::iterator it;
 
-	for(it=vText.begin();it<vText.end();++it)
-	{
+	for(it = vText.begin(); it < vText.end(); ++it) {
 		CMenuElementText *pMenuElementText=*it;
 		
 		textSize = pMenuElementText->GetTextSize();
@@ -4380,49 +3920,41 @@ void CMenuSliderText::AddText(CMenuElementText *_pText)
 	}
 }
 
-//-----------------------------------------------------------------------------
+void CMenuSliderText::Move(int _iX, int _iY) {
 
-void CMenuSliderText::Move(int _iX, int _iY)
-{
 	CMenuZone::Move(_iX, _iY);
 
 	pLeftButton->Move(_iX, _iY);
 	pRightButton->Move(_iX, _iY);
 
-	for (std::vector<CMenuElementText*>::const_iterator i = vText.begin(), i_end = vText.end(); i != i_end; ++i)
+	for(std::vector<CMenuElementText*>::const_iterator i = vText.begin(), i_end = vText.end(); i != i_end; ++i)
 		(*i)->Move(_iX, _iY);
 }
 
-//-----------------------------------------------------------------------------
+void CMenuSliderText::EmptyFunction() {
 
-void CMenuSliderText::EmptyFunction()
-{
 	//Touche pour la selection
-	if(GInput->isKeyPressedNowPressed(Keyboard::Key_LeftArrow))
-	{
+	if(GInput->isKeyPressedNowPressed(Keyboard::Key_LeftArrow)) {
 		iPos--;
 
-		if (iPos <= 0) iPos = 0;
-	}
-	else
-	{
-		if( GInput->isKeyPressedNowPressed( Keyboard::Key_RightArrow ) )
-		{
+		if(iPos <= 0)
+			iPos = 0;
+	} else {
+		if(GInput->isKeyPressedNowPressed(Keyboard::Key_RightArrow)) {
 			iPos++;
 
 			arx_assert(iPos >= 0);
 
-			if ((size_t)iPos >= vText.size() - 1 ) iPos = vText.size() - 1;
-
-
+			if((size_t)iPos >= vText.size() - 1)
+				iPos = vText.size() - 1;
 		}
 	}
 }
 
-//-----------------------------------------------------------------------------
+bool CMenuSliderText::OnMouseClick(int _iMouseButton) {
 
-bool CMenuSliderText::OnMouseClick(int)
-{
+	ARX_UNUSED(_iMouseButton);
+
 	if(!enabled) {
 		return false;
 	}
@@ -4435,27 +3967,26 @@ bool CMenuSliderText::OnMouseClick(int)
 	int iX = GInput->getMousePosAbs().x;
 	int iY = GInput->getMousePosAbs().y;
 
-	if ((iX >= rZone.left) &&
-		(iY >= rZone.top) &&
-		(iX <= rZone.right) &&
-		(iY <= rZone.bottom))
-	{
-		if ((iX >= pLeftButton->rZone.left) &&
-			(iY >= pLeftButton->rZone.top) &&
-			(iX <= pLeftButton->rZone.right) &&
-			(iY <= pLeftButton->rZone.bottom))
-		{
+	if(iX >= rZone.left
+	   && iY >= rZone.top
+	   && iX <= rZone.right
+	   && iY <= rZone.bottom
+	) {
+		if(iX >= pLeftButton->rZone.left
+		   && iY >= pLeftButton->rZone.top
+		   && iX <= pLeftButton->rZone.right
+		   && iY <= pLeftButton->rZone.bottom
+		) {
 			iPos--;
 
 			if(iPos < 0) {
 				iPos = vText.size() - 1;
 			}
-		}
-		else if ((iX >= pRightButton->rZone.left) &&
-				(iY >= pRightButton->rZone.top) &&
-				(iX <= pRightButton->rZone.right) &&
-				(iY <= pRightButton->rZone.bottom))
-		{
+		} else if(iX >= pRightButton->rZone.left
+				  && iY >= pRightButton->rZone.top
+				  && iX <= pRightButton->rZone.right
+				  && iY <= pRightButton->rZone.bottom
+		) {
 			iPos++;
 
 			arx_assert(iPos >= 0);
@@ -4467,16 +3998,12 @@ bool CMenuSliderText::OnMouseClick(int)
 	}
 
 	switch(iID) {
-		
 		case BUTTON_MENUOPTIONSVIDEO_RESOLUTION: {
 			std::string pcText = (vText.at(iPos))->lpszText;
 			
 			if(pcText == AUTO_RESOLUTION_STRING) {
-				
 				newWidth = newHeight = 0;
-				
 			} else {
-				
 				std::stringstream ss( pcText );
 				int iX = config.video.resolution.x;
 				int iY = config.video.resolution.y;
@@ -4484,72 +4011,45 @@ bool CMenuSliderText::OnMouseClick(int)
 				ss >> iX >> tmp >> iY;
 				newWidth = iX;
 				newHeight = iY;
-				
 			}
-			
 			break;
 		}
-		
 		case BUTTON_MENUOPTIONSVIDEO_RENDERER: {
 			switch((vText.at(iPos))->eMenuState) {
 				case OPTIONS_VIDEO_RENDERER_OPENGL:    config.window.framework = "SDL"; break;
-				case OPTIONS_VIDEO_RENDERER_D3D9:      config.window.framework = "D3D9"; break;
 				case OPTIONS_VIDEO_RENDERER_AUTOMATIC: config.window.framework = "auto"; break;
 				default: break;
 			}
 			break;
 		}
-		
 		case BUTTON_MENUOPTIONSAUDIO_BACKEND: {
 			switch((vText.at(iPos))->eMenuState) {
 				case OPTIONS_AUDIO_BACKEND_OPENAL:    config.audio.backend = "OpenAL"; break;
-				case OPTIONS_AUDIO_BACKEND_DSOUND:    config.audio.backend = "DirectSound"; break;
 				case OPTIONS_AUDIO_BACKEND_AUTOMATIC: config.audio.backend = "auto"; break;
 				default: break;
 			}
 			break;
 		}
-		case BUTTON_MENUOPTIONS_CONTROLS_BACKEND: {
-			switch((vText.at(iPos))->eMenuState) {
-				case OPTIONS_INPUT_BACKEND_SDL:       config.input.backend = "SDL"; break;
-				case OPTIONS_INPUT_BACKEND_DINPUT:    config.input.backend = "DirectInput8"; break;
-				case OPTIONS_INPUT_BACKEND_AUTOMATIC: config.input.backend = "auto"; break;
-				default: break;
-			}
-			break;
-		}
-		
 		// MENUOPTIONS_VIDEO
-		case BUTTON_MENUOPTIONSVIDEO_BPP: {
-			std::stringstream ss;
-			ss << vText[iPos]->lpszText;
-			ss >> newBpp;
-			break;
-		}
-		
 		case BUTTON_MENUOPTIONSVIDEO_OTHERSDETAILS: {
 			ARXMenu_Options_Video_SetDetailsQuality(iPos);
 			break;
 		}
-		
 	}
 	
 	return false;
 }
 
-//-----------------------------------------------------------------------------
+void CMenuSliderText::Update(int _iTime) {
 
-void CMenuSliderText::Update(int _iTime)
-{
 	pLeftButton->Update(_iTime);
 	pRightButton->Update(_iTime);
 }
 
-//-----------------------------------------------------------------------------
-
 void CMenuSliderText::Render() {
 	
-	if(bNoMenu) return;
+	if(bNoMenu)
+		return;
 	
 	if(enabled) {
 		pLeftButton->Render();
@@ -4572,11 +4072,10 @@ void CMenuSliderText::setEnabled(bool enable) {
 	}
 }
 
-//-----------------------------------------------------------------------------
+void CMenuSliderText::RenderMouseOver() {
 
-void CMenuSliderText::RenderMouseOver()
-{
-	if(bNoMenu) return;
+	if(bNoMenu)
+		return;
 
 	pMenuCursor->SetMouseOver();
 
@@ -4590,27 +4089,25 @@ void CMenuSliderText::RenderMouseOver()
 	GRenderer->SetRenderState(Renderer::AlphaBlending, true);
 	GRenderer->SetBlendFunc(Renderer::BlendOne, Renderer::BlendOne);
 
-	if ((iX >= rZone.left) &&
-		(iY >= rZone.top) &&
-		(iX <= rZone.right) &&
-		(iY <= rZone.bottom))
-	{
-		if ((iX >= pLeftButton->rZone.left) &&
-			(iY >= pLeftButton->rZone.top) &&
-			(iX <= pLeftButton->rZone.right) &&
-			(iY <= pLeftButton->rZone.bottom))
-		{
+	if(iX >= rZone.left
+	   && iY >= rZone.top
+	   && iX <= rZone.right
+	   && iY <= rZone.bottom
+	) {
+		if(iX >= pLeftButton->rZone.left
+		   && iY >= pLeftButton->rZone.top
+		   && iX <= pLeftButton->rZone.right
+		   && iY <= pLeftButton->rZone.bottom
+		) {
 			pLeftButton->Render();
 
+		} else if(iX >= pRightButton->rZone.left
+				  && iY >= pRightButton->rZone.top
+				  && iX <= pRightButton->rZone.right
+				  && iY <= pRightButton->rZone.bottom
+		) {
+			pRightButton->Render();
 		}
-		else if ((iX >= pRightButton->rZone.left) &&
-				(iY >= pRightButton->rZone.top) &&
-				(iX <= pRightButton->rZone.right) &&
-				(iY <= pRightButton->rZone.bottom))
-			{
-				pRightButton->Render();
-
-			}
 	}
 }
 
@@ -4658,63 +4155,60 @@ void CMenuSlider::Move(int _iX, int _iY) {
 	pRightButton->Move(_iX, _iY);
 }
 
-void CMenuSlider::EmptyFunction()
-{
+void CMenuSlider::EmptyFunction() {
+
 	//Touche pour la selection
-	if(GInput->isKeyPressedNowPressed(Keyboard::Key_LeftArrow))
-	{
+	if(GInput->isKeyPressedNowPressed(Keyboard::Key_LeftArrow)) {
 		iPos--;
 
-		if (iPos <= 0) iPos = 0;
-	}
-	else
-	{
-		if(GInput->isKeyPressedNowPressed(Keyboard::Key_RightArrow))
-		{
+		if(iPos <= 0)
+			iPos = 0;
+	} else {
+		if(GInput->isKeyPressedNowPressed(Keyboard::Key_RightArrow)) {
 			iPos++;
 
-			if (iPos >= 10) iPos = 10;
+			if(iPos >= 10)
+				iPos = 10;
 		}
 	}
-
 }
 
-//-----------------------------------------------------------------------------
+bool CMenuSlider::OnMouseClick(int _iMouseButton) {
 
-bool CMenuSlider::OnMouseClick(int)
-{
+	ARX_UNUSED(_iMouseButton);
 	ARX_SOUND_PlayMenu(SND_MENU_CLICK);
 
 	int iX = GInput->getMousePosAbs().x;
 	int iY = GInput->getMousePosAbs().y;
 
-	if ((iX >= rZone.left) &&
-		(iY >= rZone.top) &&
-		(iX <= rZone.right) &&
-		(iY <= rZone.bottom))
-	{
-		if ((iX >= pLeftButton->rZone.left) &&
-			(iY >= pLeftButton->rZone.top) &&
-			(iX <= pLeftButton->rZone.right) &&
-			(iY <= pLeftButton->rZone.bottom))
-		{
+	if(iX >= rZone.left
+	   && iY >= rZone.top
+	   && iX <= rZone.right
+	   && iY <= rZone.bottom
+	) {
+		if(iX >= pLeftButton->rZone.left
+		   && iY >= pLeftButton->rZone.top
+		   && iX <= pLeftButton->rZone.right
+		   && iY <= pLeftButton->rZone.bottom
+		) {
 			iPos--;
 
-			if (iPos <= 0) iPos = 0;
+			if(iPos <= 0)
+				iPos = 0;
 		}
-		else if ((iX >= pRightButton->rZone.left) &&
-				(iY >= pRightButton->rZone.top) &&
-				(iX <= pRightButton->rZone.right) &&
-				(iY <= pRightButton->rZone.bottom))
-			{
-				iPos++;
+		else if(iX >= pRightButton->rZone.left
+				&& iY >= pRightButton->rZone.top
+				&& iX <= pRightButton->rZone.right
+				&& iY <= pRightButton->rZone.bottom
+		) {
+			iPos++;
 
-				if (iPos >= 10) iPos = 10;
-			}
+			if(iPos >= 10)
+				iPos = 10;
+		}
 	}
 
-	switch (iID)
-	{
+	switch (iID) {
 	// MENUOPTIONS_VIDEO
 	case BUTTON_MENUOPTIONSVIDEO_FOG:
 		ARXMenu_Options_Video_SetFogDistance(iPos);
@@ -4746,8 +4240,6 @@ bool CMenuSlider::OnMouseClick(int)
 	return false;
 }
 
-//-----------------------------------------------------------------------------
-
 void CMenuSlider::Update(int _iTime) {
 	
 	pLeftButton->Update(_iTime);
@@ -4763,13 +4255,13 @@ void CMenuSlider::Update(int _iTime) {
 	rZone.bottom = rZone.top + std::max(pLeftButton->GetHeight(), pRightButton->GetHeight());
 }
 
-void CMenuSlider::Render()
-{
-	if(bNoMenu) return;
+void CMenuSlider::Render() {
+
+	if(bNoMenu)
+		return;
 
 	pLeftButton->Render();
 	pRightButton->Render();
-
 
 	float iX = static_cast<float>( rZone.left + pLeftButton->GetWidth() );
 	float iY = static_cast<float>( rZone.top );
@@ -4786,8 +4278,7 @@ void CMenuSlider::Render()
 
 	TextureContainer *pTex = pTex1;
 
-	for (int i=0; i<10; i++)
-	{
+	for(int i = 0; i < 10; i++) {
 		iTexW = 0;
 
 		if(i < iPos) {
@@ -4801,8 +4292,7 @@ void CMenuSlider::Render()
 		}
 		
 		if(pTex) {
-			EERIEDrawBitmap2(iX, iY, RATIO_X(pTex->m_dwWidth), RATIO_Y(pTex->m_dwHeight),
-			                 0, pTex, Color::white);
+			EERIEDrawBitmap2(iX, iY, RATIO_X(pTex->m_dwWidth), RATIO_Y(pTex->m_dwHeight), 0, pTex, Color::white);
 		}
 		
 		iX += iTexW;
@@ -4811,9 +4301,10 @@ void CMenuSlider::Render()
 	GRenderer->SetRenderState(Renderer::AlphaBlending, false);
 }
 
-void CMenuSlider::RenderMouseOver()
-{
-	if(bNoMenu) return;
+void CMenuSlider::RenderMouseOver() {
+
+	if(bNoMenu)
+		return;
 
 	pMenuCursor->SetMouseOver();
 
@@ -4823,24 +4314,23 @@ void CMenuSlider::RenderMouseOver()
 	GRenderer->SetRenderState(Renderer::AlphaBlending, true);
 	GRenderer->SetBlendFunc(Renderer::BlendOne, Renderer::BlendOne);
 
-	if ((iX >= rZone.left) &&
-		(iY >= rZone.top) &&
-		(iX <= rZone.right) &&
-		(iY <= rZone.bottom))
-	{
-		if ((iX >= pLeftButton->rZone.left) &&
-			(iY >= pLeftButton->rZone.top) &&
-			(iX <= pLeftButton->rZone.right) &&
-			(iY <= pLeftButton->rZone.bottom))
-		{
+	if(iX >= rZone.left
+	   && iY >= rZone.top
+	   && iX <= rZone.right
+	   && iY <= rZone.bottom
+	) {
+		if(iX >= pLeftButton->rZone.left
+		   && iY >= pLeftButton->rZone.top
+		   && iX <= pLeftButton->rZone.right
+		   && iY <= pLeftButton->rZone.bottom
+		) {
 			pLeftButton->Render();
 
-		}
-		else if ((iX >= pRightButton->rZone.left) &&
-				(iY >= pRightButton->rZone.top) &&
-				(iX <= pRightButton->rZone.right) &&
-				(iY <= pRightButton->rZone.bottom))
-		{
+		} else if(iX >= pRightButton->rZone.left
+				  && iY >= pRightButton->rZone.top
+				  && iX <= pRightButton->rZone.right
+				  && iY <= pRightButton->rZone.bottom
+		) {
 			pRightButton->Render();
 		}
 	}
@@ -4848,10 +4338,8 @@ void CMenuSlider::RenderMouseOver()
 	GRenderer->SetRenderState(Renderer::AlphaBlending, false);
 }
 
-//-----------------------------------------------------------------------------
+MenuCursor::MenuCursor() {
 
-MenuCursor::MenuCursor()
-{
 	pTex[0]=TextureContainer::Find("graph/interface/cursors/cursor00");
 	pTex[1]=TextureContainer::Find("graph/interface/cursors/cursor01");
 	pTex[2]=TextureContainer::Find("graph/interface/cursors/cursor02");
@@ -4870,13 +4358,10 @@ MenuCursor::MenuCursor()
 	
 	bMouseOver=false;
 
-	if(pTex[0])
-	{
+	if(pTex[0]) {
 		fTailleX=(float)pTex[0]->m_dwWidth;
 		fTailleY=(float)pTex[0]->m_dwHeight;
-	}
-	else
-	{
+	} else {
 		fTailleX=fTailleY=0.f;
 	}
 
@@ -4886,35 +4371,22 @@ MenuCursor::MenuCursor()
 	bDrawCursor=true;
 }
 
-//-----------------------------------------------------------------------------
-
 MenuCursor::~MenuCursor()
 {
 }
 
-//-----------------------------------------------------------------------------
-
-void MenuCursor::SetCursorOff()
-{
+void MenuCursor::SetCursorOff() {
 	eNumTex=CURSOR_OFF;
 }
 
-//-----------------------------------------------------------------------------
-
-void MenuCursor::SetCursorOn()
-{
+void MenuCursor::SetCursorOn() {
 	eNumTex=CURSOR_ON;
 }
 
-//-----------------------------------------------------------------------------
-
-void MenuCursor::SetMouseOver()
-{
+void MenuCursor::SetMouseOver() {
 	bMouseOver=true;
 	SetCursorOn();
 }
-
-//-----------------------------------------------------------------------------
 
 void MenuCursor::DrawOneCursor(const Vec2s& mousePos) {
 	
@@ -4922,19 +4394,19 @@ void MenuCursor::DrawOneCursor(const Vec2s& mousePos) {
 		return;
 	}
 	
-	GRenderer->GetTextureStage(0)->SetMinFilter(TextureStage::FilterNearest);
-	GRenderer->GetTextureStage(0)->SetMagFilter(TextureStage::FilterNearest);
-	GRenderer->GetTextureStage(0)->SetWrapMode(TextureStage::WrapClamp);
+	GRenderer->GetTextureStage(0)->setMinFilter(TextureStage::FilterNearest);
+	GRenderer->GetTextureStage(0)->setMagFilter(TextureStage::FilterNearest);
+	GRenderer->GetTextureStage(0)->setWrapMode(TextureStage::WrapClamp);
+
 	EERIEDrawBitmap2(static_cast<float>(mousePos.x), static_cast<float>(mousePos.y),
 	                 INTERFACE_RATIO_DWORD(scursor[iNumCursor]->m_dwWidth),
 	                 INTERFACE_RATIO_DWORD(scursor[iNumCursor]->m_dwHeight),
 	                 0.00000001f, scursor[iNumCursor], Color::white);
-	GRenderer->GetTextureStage(0)->SetMinFilter(TextureStage::FilterLinear);
-	GRenderer->GetTextureStage(0)->SetMagFilter(TextureStage::FilterLinear);
-	GRenderer->GetTextureStage(0)->SetWrapMode(TextureStage::WrapRepeat);
-}
 
-//-----------------------------------------------------------------------------
+	GRenderer->GetTextureStage(0)->setMinFilter(TextureStage::FilterLinear);
+	GRenderer->GetTextureStage(0)->setMagFilter(TextureStage::FilterLinear);
+	GRenderer->GetTextureStage(0)->setWrapMode(TextureStage::WrapRepeat);
+}
 
 void MenuCursor::Update() {
 	
@@ -4949,7 +4421,7 @@ void MenuCursor::Update() {
 	if(pTex[eNumTex]) {
 		iDiff = Vec2s(pTex[eNumTex]->m_dwWidth / 2, pTex[eNumTex]->m_dwHeight / 2);
 	} else {
-		iDiff = Vec2s::ZERO;
+		iDiff = Vec2s_ZERO;
 	}
 	
 	iOldCoord[iNbOldCoord] = GInput->getMousePosAbs() + iDiff;
@@ -4962,15 +4434,13 @@ void MenuCursor::Update() {
 	
 }
 
-//-----------------------------------------------------------------------------
-
 static bool ComputePer(const Vec2s & _psPoint1, const Vec2s & _psPoint2, TexturedVertex * _psd3dv1, TexturedVertex * _psd3dv2, float _fSize) {
 	
 	Vec2f sTemp((float)(_psPoint2.x - _psPoint1.x), (float)(_psPoint2.y - _psPoint1.y));
 	float fTemp = sTemp.x;
 	sTemp.x = -sTemp.y;
 	sTemp.y = fTemp;
-	float fMag = sTemp.length();
+	float fMag = glm::length(sTemp);
 	if(fMag < std::numeric_limits<float>::epsilon()) {
 		return false;
 	}
@@ -4986,8 +4456,6 @@ static bool ComputePer(const Vec2s & _psPoint1, const Vec2s & _psPoint2, Texture
 
 	return true;
 }
-
-//-----------------------------------------------------------------------------
 
 static void DrawLine2D(const Vec2s * points, int _iNbPt, float _fSize, float _fRed, float _fGreen, float _fBlue) {
 	
@@ -5045,8 +4513,6 @@ static void DrawLine2D(const Vec2s * points, int _iNbPt, float _fSize, float _fR
 	GRenderer->SetRenderState(Renderer::AlphaBlending, false);
 }
 
-//-----------------------------------------------------------------------------
-
 void MenuCursor::DrawCursor()
 {
 	if(!bDrawCursor)
@@ -5068,32 +4534,24 @@ void MenuCursor::DrawCursor()
 
 	lFrameDiff += checked_range_cast<long>(ARXDiffTimeMenu);
 
-	if(lFrameDiff>70)
-	{
-		if(bMouseOver)
-		{
-			if(iNumCursor<4)
-			{
+	if(lFrameDiff > 70) {
+		if(bMouseOver) {
+			if(iNumCursor < 4) {
 				iNumCursor++;
-			}
-			else
-			{
-				if(iNumCursor>4)
-				{
+			} else {
+				if(iNumCursor > 4) {
 					iNumCursor--;
 				}
 			}
 
 			SetCursorOff();
 			bMouseOver=false;
-		}
-		else
-		{
-			if (iNumCursor > 0)
-			{
+		} else {
+			if(iNumCursor > 0) {
 				iNumCursor++;
 
-				if(iNumCursor>7) iNumCursor=0;
+				if(iNumCursor > 7)
+					iNumCursor=0;
 			}
 		}
 

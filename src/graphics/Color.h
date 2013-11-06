@@ -122,6 +122,20 @@ public:
 	inline Color3 operator*(float factor) const {
 		return Color3(r * factor, g * factor, b * factor);
 	}
+
+	Color3 & operator+=(const Color3 & right) {
+		r += right.r;
+		g += right.g;
+		b += right.b;
+		return *this;
+	}
+
+	Color3 & operator*=(const Color3 & right) {
+		r *= right.r;
+		g *= right.g;
+		b *= right.b;
+		return *this;
+	}
 	
 };
 
@@ -257,9 +271,22 @@ template <typename T>
 Color3<T> operator*(Color3<T> c0, Color3<T> c1) {
 	return Color3<T>(c0.r * c1.r, c0.g * c1.g, c0.b * c1.b);
 }
+
+template <typename T>
+Color4<T> operator+(Color4<T> c0, Color4<T> c1) {
+	return Color4<T>(c0.r + c1.r, c0.g + c1.g, c0.b + c1.b, c0.a + c1.a);
+}
+template <typename T>
+Color4<T> operator-(Color4<T> c0, Color4<T> c1) {
+	return Color4<T>(c0.r - c1.r, c0.g - c1.g, c0.b - c1.b, c0.a - c1.a);
+}
 template <typename T>
 Color4<T> operator*(Color4<T> c0, Color4<T> c1) {
 	return Color4<T>(c0.r * c1.r, c0.g * c1.g, c0.b * c1.b, c0.a * c1.a);
+}
+template <typename T>
+Color4<T> operator*(Color4<T> c0, float scale) {
+	return Color4<T>(c0.r * scale, c0.g * scale, c0.b * scale, c0.a * scale);
 }
 
 #endif // ARX_GRAPHICS_COLOR_H

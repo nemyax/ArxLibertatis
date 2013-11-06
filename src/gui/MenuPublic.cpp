@@ -50,6 +50,7 @@ ZeniMax Media Inc., Suite 120, Rockville, Maryland 20850 USA.
 #include <string>
 
 #include "animation/Animation.h"
+#include "animation/AnimationRender.h"
 
 #include "core/Application.h"
 #include "core/Config.h"
@@ -72,18 +73,21 @@ ZeniMax Media Inc., Suite 120, Rockville, Maryland 20850 USA.
 #include "io/resource/ResourcePath.h"
 #include "io/log/Logger.h"
 
-#include "math/MathFwd.h"
-#include "math/Vector2.h"
+#include "math/Types.h"
+#include "math/Vector.h"
 
 #include "scene/ChangeLevel.h"
 #include "scene/GameSound.h"
 #include "scene/LoadLevel.h"
+#include "scene/Light.h"
 
 #include "window/RenderWindow.h"
 
 extern bool bQuickGenFirstClick;
-extern long DANAESIZX;
-extern long DANAESIZY;
+
+extern Rect g_size;
+
+extern long LOADQUEST_SLOT;
 
 extern long REFUSE_GAME_RETURN;
 
@@ -92,39 +96,34 @@ extern bool	bFadeInOut;
 extern int iFadeAction;
 
 extern long ZMAPMODE;
-extern long FRAME_COUNT;
-
-void ARX_SOUND_PushAnimSamples();
-void ARX_SOUND_PopAnimSamples();
 
 //-----------------------------------------------------------------------------
-void ARXMenu_Private_Options_Video_SetResolution(bool fullscreen, int _iWidth, int _iHeight, int _iBpp) {
+void ARXMenu_Private_Options_Video_SetResolution(bool fullscreen, int _iWidth, int _iHeight) {
 	
 	if(!GRenderer) {
 		return;
 	}
 	
 	config.video.resolution = Vec2i(_iWidth, _iHeight);
-	config.video.bpp = _iBpp;
 	
 	if(!fullscreen) {
-		if(config.video.resolution == Vec2i::ZERO) {
+		if(config.video.resolution == Vec2i_ZERO) {
 			LogInfo << "Configuring automatic fullscreen resolution selection";
 		} else {
-			LogInfo << "Configuring fullscreen resolution to " << _iWidth << 'x' << _iHeight << '@' << _iBpp;
+			LogInfo << "Configuring fullscreen resolution to " << DisplayMode(config.video.resolution);
 		}
 	}
 	
-	RenderWindow * window = mainApp->GetWindow();
+	RenderWindow * window = mainApp->getWindow();
 	
 	if(window->isFullScreen() != fullscreen || fullscreen) {
 		
 		GRenderer->Clear(Renderer::ColorBuffer | Renderer::DepthBuffer);
 		GRenderer->EndScene();
 		
-		mainApp->GetWindow()->showFrame();
+		mainApp->getWindow()->showFrame();
 		
-		mainApp->setFullscreen(fullscreen);
+		mainApp->setWindowSize(fullscreen);
 		
 		GRenderer->BeginScene();
 		
@@ -135,8 +134,6 @@ void ARXMenu_Options_Video_SetFogDistance(int _iFog) {
 	config.video.fogDistance = clamp(_iFog, 0, 10);
 }
 
-extern long MAX_FRAME_COUNT;
-extern long USEINTERNORM;
 //-----------------------------------------------------------------------------
 void ARXMenu_Options_Video_SetDetailsQuality(int _iQuality)
 {
@@ -150,21 +147,15 @@ void ARXMenu_Options_Video_SetDetailsQuality(int _iQuality)
 	{
 		case 0:
 			ZMAPMODE = 0;
-			MAX_LLIGHTS = 6; 
-			MAX_FRAME_COUNT = 3;
-			USEINTERNORM = 1; 
+			MAX_LLIGHTS = 6;
 			break;
 		case 1:
 			ZMAPMODE = 1;
-			MAX_LLIGHTS = 10; 
-			MAX_FRAME_COUNT = 2;
-			USEINTERNORM = 1; 
+			MAX_LLIGHTS = 10;
 			break;
 		case 2:
 			ZMAPMODE = 1;
-			MAX_LLIGHTS = 15; 
-			MAX_FRAME_COUNT = 1;
-			USEINTERNORM = 1; 
+			MAX_LLIGHTS = 15;
 			break;
 	}
 }
@@ -259,8 +250,8 @@ void ARXMenu_Options_Control_SetMouseSensitivity(int sensitivity) {
 //-----------------------------------------------------------------------------
 //RESUME GAME
 //-----------------------------------------------------------------------------
-void ARXMenu_GetResumeGame(bool & allowResume) {
-	allowResume = !REFUSE_GAME_RETURN;
+bool ARXMenu_CanResumeGame() {
+	return !REFUSE_GAME_RETURN;
 }
 
 //-----------------------------------------------------------------------------
@@ -290,26 +281,13 @@ void ARXMenu_NewQuest()
 extern float PROGRESS_BAR_TOTAL;
 extern float OLD_PROGRESS_BAR_COUNT;
 extern float PROGRESS_BAR_COUNT;
-extern long NEED_SPECIAL_RENDEREND;
 void ARXMenu_LoadQuest(size_t num) {
 	
-	GRenderer->EndScene();
-	
-	ARX_SOUND_MixerPause(ARX_SOUND_MixerMenu);
-	
+	LOADQUEST_SLOT = num;
+
 	ARX_SOUND_PlayMenu(SND_MENU_CLICK);
-	LoadLevelScreen();
-	PROGRESS_BAR_TOTAL = 238;
-	OLD_PROGRESS_BAR_COUNT = PROGRESS_BAR_COUNT = 0;
-	PROGRESS_BAR_COUNT += 1.f;
-	LoadLevelScreen(savegames[num].level);
-	DanaeClearLevel();
-	ARX_CHANGELEVEL_Load(savegames[num].savefile);
 	REFUSE_GAME_RETURN = 0;
-	NEED_SPECIAL_RENDEREND = 1;
 	ARX_MENU_Clicked_QUIT();
-	
-	GRenderer->BeginScene();
 }
 
 //SAVE QUEST

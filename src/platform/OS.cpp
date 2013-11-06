@@ -20,23 +20,24 @@
 #include "platform/OS.h"
 
 #include "Configure.h"
+#include "platform/Platform.h"
 
 #include <sstream>
 #include <vector>
 #include <boost/algorithm/string/trim.hpp>
 #include <boost/algorithm/string/predicate.hpp>
 
-#ifdef ARX_HAVE_WINAPI
+#if ARX_PLATFORM == ARX_PLATFORM_WIN32
 #include <windows.h>
 #include <cstring>
 #endif
 
-#ifdef ARX_HAVE_UNAME
+#if ARX_HAVE_UNAME
 #include <sys/utsname.h>
 #endif
 
 // yes, we need stdio.h, POSIX doesn't know about cstdio
-#ifdef ARX_HAVE_POPEN
+#if ARX_HAVE_POPEN
 #include <stdio.h>
 #endif
 
@@ -44,13 +45,13 @@
 #include "io/fs/Filesystem.h"
 #include "io/fs/FileStream.h"
 #include "platform/Architecture.h"
-#include "platform/Platform.h"
+#include "platform/Process.h"
 #include "util/String.h"
 
 namespace platform {
 
 // Windows-specific functions
-#ifdef ARX_HAVE_WINAPI
+#if ARX_PLATFORM == ARX_PLATFORM_WIN32
 
 typedef void (WINAPI *PGNSI)(LPSYSTEM_INFO);
 
@@ -140,17 +141,17 @@ static std::string getWindowsVersionName() {
 	return os.str();
 }
 
-#endif // ARX_HAVE_WINAPI
+#endif // ARX_PLATFORM == ARX_PLATFORM_WIN32
 
 
 std::string getOSName() {
 	
-	#ifdef ARX_HAVE_WINAPI
+	#if ARX_PLATFORM == ARX_PLATFORM_WIN32
 	// Get operating system friendly name from registry.
 	return getWindowsVersionName();
 	#endif
 	
-	#ifdef ARX_HAVE_UNAME
+	#if ARX_HAVE_UNAME
 	struct utsname uname_buf;
 	if(uname(&uname_buf) == 0) {
 		return std::string(uname_buf.sysname) + ' ' + uname_buf.release;
@@ -188,7 +189,7 @@ std::string getOSArchitecture() {
 	}
 	#endif
 	
-	#ifdef ARX_HAVE_UNAME
+	#if ARX_HAVE_UNAME
 	struct utsname uname_buf;
 	if(uname(&uname_buf) == 0) {
 		return uname_buf.machine;
@@ -200,26 +201,6 @@ std::string getOSArchitecture() {
 
 
 #if ARX_PLATFORM == ARX_PLATFORM_LINUX
-
-#if defined(ARX_HAVE_POPEN) && defined(ARX_HAVE_PCLOSE)
-
-static std::string getOutputOf(const char * command) {
-	FILE * pipe = popen(command, "r");
-	if(!pipe) {
-		return std::string();
-	}
-	char buffer[1024];
-	std::string result;
-	while(!feof(pipe)) {
-		if(size_t count = fread(buffer, 1, ARRAY_SIZE(buffer), pipe)) {
-			result.append(buffer, count);
-		}
-	}
-	pclose(pipe);
-	return result;
-}
-
-#endif
 
 
 /*!
@@ -336,9 +317,10 @@ std::string getOSDistribution() {
 	// Get distribution information from `lsb_release -a` output.
 	// Don't parse /etc/lsb-release ourselves unless there is no other way
 	// because lsb_release may have distro-specific patches
-	#if defined(ARX_HAVE_POPEN) && defined(ARX_HAVE_PCLOSE)
+	#if ARX_HAVE_POPEN && ARX_HAVE_PCLOSE
 	{
-		std::istringstream iss(getOutputOf("lsb_release -a"));
+		const char * args[] = { "lsb_release", "-a", NULL };
+		std::istringstream iss(getOutputOf("lsb_release", args));
 		const char * keys[] = { "Description", "Distributor ID", "Release", "(Codename" };
 		std::string distro = parseDistributionName(iss, ':', keys, ARRAY_SIZE(keys));
 		if(!distro.empty()) {

@@ -49,10 +49,10 @@ ZeniMax Media Inc., Suite 120, Rockville, Maryland 20850 USA.
 #include <string>
 
 #include "audio/AudioTypes.h"
-#include "math/MathFwd.h"
+#include "math/Types.h"
 #include "math/Angle.h"
 #include "math/Random.h"
-#include "math/Vector3.h"
+#include "math/Vector.h"
 #include "platform/Flags.h"
 
 class Entity;
@@ -94,7 +94,7 @@ enum SpellcastFlag {
 	SPELLCAST_FLAG_LAUNCHPRECAST  = (1<<4),
 	SPELLCAST_FLAG_NOCHECKCANCAST = (1<<5),
 	SPELLCAST_FLAG_NOSOUND        = (1<<6),
-	SPELLCAST_FLAG_RESTORE        = (1<<7),
+	SPELLCAST_FLAG_RESTORE        = (1<<7)
 };
 DECLARE_FLAGS(SpellcastFlag, SpellcastFlags)
 DECLARE_FLAGS_OPERATORS(SpellcastFlags)
@@ -198,16 +198,6 @@ void ARX_SPELLS_Precast_Launch(long num);
 Spell GetSpellId(const std::string & spell);
 void TryToCastSpell(Entity * io, Spell spellid, long level, long target, SpellcastFlags flags, long duration);
 void ARX_SPELLS_Precast_Check();
-
-struct EYEBALL_DEF {
-	long exist;
-	Vec3f pos;
-	Anglef angle;
-	Vec3f size;
-	float floating;
-};
-
-extern EYEBALL_DEF eyeball;
 
 const size_t MAX_SPELL_SYMBOLS = 6;
 extern Rune SpellSymbol[MAX_SPELL_SYMBOLS];

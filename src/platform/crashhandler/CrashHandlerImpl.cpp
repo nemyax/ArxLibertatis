@@ -25,7 +25,6 @@
 
 #include "io/fs/Filesystem.h"
 #include "io/fs/FilePath.h"
-#include "io/fs/PathConstants.h"
 
 #include "math/Random.h"
 
@@ -45,25 +44,7 @@ bool CrashHandlerImpl::initialize() {
 	
 	bool initialized = true;
 	
-	fs::path local_path = fs::path(getExecutablePath());
-	if(!local_path.empty()) {
-		local_path = local_path.parent() / m_CrashHandlerApp;
-		if(fs::exists(local_path)) {
-			m_CrashHandlerPath = local_path;
-		}
-	}
-	if(m_CrashHandlerPath.empty()) {
-		local_path = m_CrashHandlerApp;
-		if(fs::exists(local_path)) {
-			m_CrashHandlerPath = local_path;
-		}
-	}
-	if(fs::libexec_dir && m_CrashHandlerPath.empty()) {
-		local_path = fs::path(fs::libexec_dir) / m_CrashHandlerApp;
-		if(fs::exists(local_path)) {
-			m_CrashHandlerPath = local_path;
-		}
-	}
+	m_CrashHandlerPath = platform::getHelperExecutable(m_CrashHandlerApp);
 	
 	if(!createSharedMemory()) {
 		return false;
@@ -125,8 +106,9 @@ void CrashHandlerImpl::fillBasicCrashInfo() {
 	m_pCrashInfo->processId = getProcessId();
 
 	strcpy(m_pCrashInfo->crashReportFolder, "crashes");
-
-	strncpy(m_pCrashInfo->executablePath, getExecutablePath().c_str(), sizeof(m_pCrashInfo->executablePath));
+	
+	std::string exe = platform::getExecutablePath().string();
+	strncpy(m_pCrashInfo->executablePath, exe.c_str(), sizeof(m_pCrashInfo->executablePath));
 	m_pCrashInfo->executablePath[sizeof(m_pCrashInfo->executablePath)-1] = 0; // Make sure our string is null terminated
 
 	strncpy(m_pCrashInfo->executableVersion, arx_version.c_str(), sizeof(m_pCrashInfo->executableVersion));

@@ -583,11 +583,11 @@ void print_spellcast_flags(s32 flags) {
 }
 
 void print_physics(const SavedIOPhysics & physics) {
-	if((Vec3f)physics.cyl.origin != Vec3f::ZERO || physics.cyl.radius || physics.cyl.height) cout << "  Cylinder: origin=" << physics.cyl.origin << " radius=" << physics.cyl.radius << " height=" << physics.cyl.height << endl;
-	if((Vec3f)physics.startpos != Vec3f::ZERO) cout << "  Start position: " << physics.startpos << endl;
-	if((Vec3f)physics.targetpos != Vec3f::ZERO) cout << "  Target position: " << physics.targetpos << endl;
-	if((Vec3f)physics.velocity != Vec3f::ZERO) cout << "  Velocity: " << physics.velocity << endl;
-	if((Vec3f)physics.forces != Vec3f::ZERO) cout << "  Forces: " << physics.forces << endl;
+	if(physics.cyl.origin.toVec3() != Vec3f_ZERO || physics.cyl.radius || physics.cyl.height) cout << "  Cylinder: origin=" << physics.cyl.origin << " radius=" << physics.cyl.radius << " height=" << physics.cyl.height << endl;
+	if(physics.startpos.toVec3() != Vec3f_ZERO) cout << "  Start position: " << physics.startpos << endl;
+	if(physics.targetpos.toVec3() != Vec3f_ZERO) cout << "  Target position: " << physics.targetpos << endl;
+	if(physics.velocity.toVec3() != Vec3f_ZERO) cout << "  Velocity: " << physics.velocity << endl;
+	if(physics.forces.toVec3() != Vec3f_ZERO) cout << "  Forces: " << physics.forces << endl;
 }
 
 void print_ident(SaveBlock & save, const string & ident) {
@@ -1136,16 +1136,16 @@ int view_io(SaveBlock & save, const char * dat, size_t size) {
 	if(ais.ioflags & (1<<31)) cout << " (unknown)";
 	cout << endl;
 	
-	if((Vec3f)ais.pos != Vec3f::ZERO || (Vec3f)ais.initpos != Vec3f::ZERO) {
+	if(ais.pos.toVec3() != Vec3f_ZERO || ais.initpos.toVec3() != Vec3f_ZERO) {
 		cout << "Position: " << ais.pos;
-		if((Vec3f)ais.pos != (Vec3f)ais.initpos) {
+		if(ais.pos.toVec3() != ais.initpos.toVec3()) {
 			cout << " initial: " << ais.initpos;
 		}
 		cout << endl;
 	}
-	if((Vec3f)ais.lastpos != (Vec3f)ais.pos) cout << "Last position: "  << ais.lastpos << endl;
-	if((Vec3f)ais.move != Vec3f::ZERO) cout << "Movement: " << ais.move << endl;
-	if((Vec3f)ais.lastmove != (Vec3f)ais.move) cout << "Last movement: " << ais.lastmove << endl;
+	if(ais.lastpos.toVec3() != ais.pos.toVec3()) cout << "Last position: " << ais.lastpos << endl;
+	if(ais.move.toVec3() != Vec3f_ZERO) cout << "Movement: " << ais.move << endl;
+	if(ais.lastmove.toVec3() != ais.move.toVec3()) cout << "Last movement: " << ais.lastmove << endl;
 	if((Anglef)ais.angle != Anglef::ZERO || (Anglef)ais.initangle != Anglef::ZERO) {
 		cout << "Angle: " << ais.angle;
 		if((Anglef)ais.angle != (Anglef)ais.initangle) {
@@ -1337,7 +1337,7 @@ int view_io(SaveBlock & save, const char * dat, size_t size) {
 	print_anim_layers(ais.animlayer);
 	
 	cout << endl << "Physics:" << endl;
-	if((Vec3f)ais.velocity != Vec3f::ZERO) cout << "  Velocity: " << ais.velocity << endl;
+	if(ais.velocity.toVec3() != Vec3f_ZERO) cout << "  Velocity: " << ais.velocity << endl;
 	if(ais.stopped) cout << "  Stopped: " << ais.stopped << endl;
 	print_physics(ais.physics);
 	if(ais.original_radius) cout << "  Original radius: " << ais.original_radius << endl;

@@ -63,7 +63,7 @@ ZeniMax Media Inc., Suite 120, Rockville, Maryland 20850 USA.
 #include <boost/noncopyable.hpp>
 
 #include "io/resource/ResourcePath.h"
-#include "math/Vector2.h"
+#include "math/Vector.h"
 #include "platform/Flags.h"
 #include "graphics/GraphicsTypes.h"
 
@@ -74,10 +74,6 @@ struct TexturedVertex;
 class Texture2D;
 
 extern long GLOBAL_EERIETEXTUREFLAG_LOADSCENE_RELEASE;
-
-struct DELAYED_PRIM {
-	EERIEPOLY * data;
-};
 
 /*!
  * Linked list structure to hold info per texture.
@@ -158,7 +154,7 @@ public:
 	
 	/*!
 	 * End of the image in texture coordinates (image size divided by stored size).
-	 * This is usually Vec2f::ONE but may differ if only power of two textures are supported.
+	 * This is usually Vec2f_ONE but may differ if only power of two textures are supported.
 	 */
 	Vec2f uv;
 	
@@ -170,34 +166,24 @@ public:
 	TCFlags systemflags;
 	
 	// BEGIN TODO: Move to a RenderBatch class... This RenderBatch class should contain a pointer to the TextureContainer used by the batch
-	DELAYED_PRIM * delayed; // delayed_drawing
-	long	delayed_nb;
-	long	delayed_max;
 	
 	std::vector<EERIEPOLY *> vPolyZMap;
 	std::vector<SMY_ZMAPPINFO> vPolyInterZMap;
 	
 	SMY_ARXMAT * tMatRoom;
 	
-	unsigned long ulMaxVertexListCull;
-	unsigned long ulNbVertexListCull;
-	TexturedVertex * pVertexListCull;
-	
-	unsigned long ulMaxVertexListCull_TNormalTrans;
-	unsigned long ulNbVertexListCull_TNormalTrans;
-	TexturedVertex * pVertexListCull_TNormalTrans;
-	
-	unsigned long ulMaxVertexListCull_TAdditive;
-	unsigned long ulNbVertexListCull_TAdditive;
-	TexturedVertex * pVertexListCull_TAdditive;
-	
-	unsigned long ulMaxVertexListCull_TSubstractive;
-	unsigned long ulNbVertexListCull_TSubstractive;
-	TexturedVertex * pVertexListCull_TSubstractive;
-	
-	unsigned long ulMaxVertexListCull_TMultiplicative;
-	unsigned long ulNbVertexListCull_TMultiplicative;
-	TexturedVertex * pVertexListCull_TMultiplicative;
+	enum TransparencyType {
+		Opaque = 0,
+		Blended,
+		Multiplicative,
+		Additive,
+		Subtractive
+	};
+
+	unsigned long max[5];
+	unsigned long count[5];
+	TexturedVertex * list[5];
+
 	// END TODO
 	
 	bool hasColorKey();

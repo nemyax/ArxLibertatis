@@ -55,7 +55,7 @@ void Note::deallocate() {
 	// Don't bother actually deleting the textures, we'll just need them again!
 	background = NULL, prevPage = NULL, nextPage = NULL;
 	
-	allocatedForRatio = Vec2f::ZERO;
+	allocatedForRatio = Vec2f_ZERO;
 	
 	_area = Rectf::ZERO;
 	_prevPageButton = Rectf::ZERO;
@@ -236,7 +236,7 @@ void Note::render() {
 	
 	float z = 0.000001f;
 	
-	GRenderer->GetTextureStage(0)->SetWrapMode(TextureStage::WrapClamp);
+	GRenderer->GetTextureStage(0)->setWrapMode(TextureStage::WrapClamp);
 	
 	if(background) {
 		EERIEDrawBitmap2(_area.left, _area.top, _area.width(), _area.height(), z, background,
@@ -269,7 +269,7 @@ void Note::render() {
 	
 	// Draw the left page
 	{
-		ARX_TEXT_DrawRect(
+		ARX_UNICODE_DrawTextInRect(
 			font,
 			_area.left + _textArea.left,
 			_area.top + _textArea.top,
@@ -281,7 +281,7 @@ void Note::render() {
 	
 	// Draw the right page
 	if(_page + 1 < pages.size()) {
-		ARX_TEXT_DrawRect(
+		ARX_UNICODE_DrawTextInRect(
 			font,
 			_area.left + _textArea.right + _pageSpacing,
 			_area.top + _textArea.top,

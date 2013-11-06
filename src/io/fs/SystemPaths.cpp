@@ -48,9 +48,9 @@ static std::vector<path> getSearchPaths(const char * input) {
 	std::vector<path> result;
 	
 	if(input) {
-		std::string decoded = expandEnvironmentVariables(input);
+		std::string decoded = platform::expandEnvironmentVariables(input);
 		typedef boost::tokenizer< boost::char_separator<char> >  tokenizer;
-		boost::char_separator<char> sep(env_list_seperators);
+		boost::char_separator<char> sep(platform::env_list_seperators);
 		tokenizer tokens(decoded, sep);
 		std::copy(tokens.begin(), tokens.end(), std::back_inserter(result));
 	} else {
@@ -79,7 +79,7 @@ static path findUserPath(const char * name, const path & force,
 	
 	// Check system settings (windows registry)
 	std::string temp;
-	if(registry && getSystemConfiguration(registry, temp)) {
+	if(registry && platform::getSystemConfiguration(registry, temp)) {
 		path dir = canonical(temp);
 		if(!create) {
 			return dir;
@@ -175,7 +175,7 @@ std::vector<path> SystemPaths::getSearchPaths(bool filter) const {
 	}
 	
 	// Check paths specified in environment variables
-	path exepath = getExecutablePath();
+	path exepath = platform::getExecutablePath();
 	#if ARX_PLATFORM != ARX_PLATFORM_WIN32
 	if(!exepath.empty()) {
 		std::string var = "${" + exepath.basename() + "_PATH}";
@@ -188,7 +188,7 @@ std::vector<path> SystemPaths::getSearchPaths(bool filter) const {
 	
 	// Check system settings (windows registry)
 	std::string temp;
-	if(getSystemConfiguration("DataDir", temp)) {
+	if(platform::getSystemConfiguration("DataDir", temp)) {
 		path dir = canonical(temp);
 		if(addSearchPath(result, dir, filter)) {
 			LogDebug("got data dir from registry: \"" << temp << "\" = " << dir);
@@ -295,7 +295,7 @@ static void listDirectoriesFor(std::ostream & os, const std::string & regKey,
 		os << " - Registry key {HKCU,HKLM}\\Software\\ArxLibertatis\\"
 		   << regKey << '\n';
 		std::string temp;
-		if(getSystemConfiguration(regKey, temp)) {
+		if(platform::getSystemConfiguration(regKey, temp)) {
 			os << "   = " << canonical(temp) << '\n';
 		}
 	}
@@ -369,7 +369,7 @@ void SystemPaths::list(std::ostream & os, const std::string & forceUser,
 	if(!forceData.empty()) {
 		os << forceData;
 	}
-	path exepath = getExecutablePath();
+	path exepath = platform::getExecutablePath();
 	os << " - Paths specifed in ${" << exepath.basename() << "_PATH}\n";
 	os << " - The directory containing the game executable\n";
 	listDirectoriesFor(os, "DataDir", data_dir_prefixes, data_dir);

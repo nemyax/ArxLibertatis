@@ -24,7 +24,7 @@
 
 #include <al.h>
 
-#include "math/Vector3.h"
+#include "math/Vector.h"
 
 const char * getAlcErrorString(ALenum error);
 
@@ -41,10 +41,5 @@ const char * getAlErrorString(ALenum error);
 		ALError << "error " desc ": " << error << " = " << getAlErrorString(error); \
 		todo \
 	}}
-
-template <class T>
-inline bool isallfinite(Vector3<T> vec) {
-	return (boost::math::isfinite)(vec.x) && (boost::math::isfinite)(vec.y)  && (boost::math::isfinite)(vec.z);
-}
 
 #endif // ARX_AUDIO_OPENAL_OPENALUTILS_H

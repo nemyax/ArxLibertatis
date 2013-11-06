@@ -50,7 +50,9 @@ ZeniMax Media Inc., Suite 120, Rockville, Maryland 20850 USA.
 #include "input/Keyboard.h"
 #include "input/Mouse.h"
 #include "input/InputKey.h"
-#include "math/Vector2.h"
+#include "math/Vector.h"
+
+class Window;
 
 class Input {
 	
@@ -59,12 +61,9 @@ public:
 	static const std::string KEY_NONE;
 	
 	Input();
-	virtual ~Input();
 	
-	bool init();
+	bool init(Window * window);
 	void reset();
-	void acquireDevices();
-	void unacquireDevices();
 	
 	void update();
 	
@@ -87,7 +86,7 @@ public:
 	void setMouseSensitivity(int sensitivity);
 	int getMouseSensitivity() const { return iSensibility; }
 	
-	bool hasMouseMoved() const { return iMouseR != Vec2s::ZERO; }
+	bool hasMouseMoved() const { return iMouseR != Vec2s_ZERO; }
 	bool getMouseButton(int buttonId) const;
 	int getMouseButtonClicked() const;
 	bool getMouseButtonRepeat(int buttonId) const;
@@ -135,7 +134,7 @@ private:
 
 extern Input * GInput;
 
-bool ARX_INPUT_Init();
+bool ARX_INPUT_Init(Window * window);
 void ARX_INPUT_Release();
  
 #endif // ARX_INPUT_INPUT_H

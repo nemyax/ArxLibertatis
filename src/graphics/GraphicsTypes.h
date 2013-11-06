@@ -54,7 +54,7 @@ ZeniMax Media Inc., Suite 120, Rockville, Maryland 20850 USA.
 
 #include "io/resource/ResourcePath.h"
 
-#include "math/Vector2.h"
+#include "math/Vector.h"
 #include "math/Angle.h"
 
 #include "platform/Flags.h"
@@ -64,71 +64,14 @@ ZeniMax Media Inc., Suite 120, Rockville, Maryland 20850 USA.
 struct EERIE_3DOBJ;
 class TextureContainer;
 class Entity;
+struct EERIE_LIGHT;
 
 struct EERIE_TRI {
 	Vec3f v[3];
 };
 
-struct EERIE_2D_BBOX {
-	Vec2f min;
-	Vec2f max;
-};
-
-struct EERIE_LIGHT {
-	char exist;
-	char type;
-	char treat;
-	char selected;
-	short extras;
-	short status; // on/off 1/0
-	Vec3f pos;
-	float fallstart;
-	float fallend;
-	float falldiff;
-	float falldiffmul;
-	float precalc;
-	Color3f rgb255;
-	float intensity;
-	Color3f rgb;
-	float i;
-	Vec3f mins;
-	Vec3f maxs;
-	float temp;
-	long ltemp;
-	Color3f ex_flicker;
-	float ex_radius;
-	float ex_frequency;
-	float ex_size;
-	float ex_speed;
-	float ex_flaresize;
-	long tl;
-	unsigned long time_creation;
-	long duration; // will start to fade before the end of duration...
-	audio::SourceId sample;
-};
-
-enum EERIE_TYPES_EXTRAS_MODE
-{
-	EXTRAS_SEMIDYNAMIC       = 0x00000001,
-	EXTRAS_EXTINGUISHABLE    = 0x00000002,
-	EXTRAS_STARTEXTINGUISHED = 0x00000004,
-	EXTRAS_SPAWNFIRE         = 0x00000008,
-	EXTRAS_SPAWNSMOKE        = 0x00000010,
-	EXTRAS_OFF               = 0x00000020,
-	EXTRAS_COLORLEGACY       = 0x00000040,
-	EXTRAS_NOCASTED          = 0x00000080,
-	EXTRAS_FIXFLARESIZE      = 0x00000100,
-	EXTRAS_FIREPLACE         = 0x00000200,
-	EXTRAS_NO_IGNIT          = 0x00000400,
-	EXTRAS_FLARE	         = 0x00000800
-};
 
 #define TYP_SPECIAL1 1
-
-
-//*************************************************************************************
-// EERIE Types
-//*************************************************************************************
 
 enum PolyTypeFlag {
 	POLY_NO_SHADOW    = (1<<0),
@@ -160,8 +103,8 @@ enum PolyTypeFlag {
 	POLY_ANGULAR_IDX3 = (1<<26),
 	POLY_LATE_MIP     = (1<<27)
 };
-DECLARE_FLAGS(PolyTypeFlag, PolyType);
-DECLARE_FLAGS_OPERATORS(PolyType);
+DECLARE_FLAGS(PolyTypeFlag, PolyType)
+DECLARE_FLAGS_OPERATORS(PolyType)
 
 struct EERIEPOLY {
 	PolyType type;
@@ -201,10 +144,6 @@ struct EERIE_FACE {
 	
 };
 
-
-//***********************************************************************
-//*		BEGIN EERIE OBJECT STRUCTURES									*
-//***********************************************************************
 struct NEIGHBOURS_DATA {
 	short nb_Nvertex;
 	short nb_Nfaces;
@@ -285,12 +224,12 @@ struct PHYSVERT
 	float		mass;
 
 	PHYSVERT()
-		: initpos(Vec3f::ZERO)
-		, temp(Vec3f::ZERO)
-		, pos(Vec3f::ZERO)
-		, velocity(Vec3f::ZERO)
-		, force(Vec3f::ZERO)
-		, inertia(Vec3f::ZERO)
+		: initpos(Vec3f_ZERO)
+		, temp(Vec3f_ZERO)
+		, pos(Vec3f_ZERO)
+		, velocity(Vec3f_ZERO)
+		, force(Vec3f_ZERO)
+		, inertia(Vec3f_ZERO)
 		, mass(0.f)
 	{}
 };
@@ -334,20 +273,11 @@ struct CUB3D
 	float	zmax;
 };
 
-struct EERIE_MOD_INFO {
-	long link_origin;
-	Vec3f link_position;
-	Vec3f scale;
-	Anglef rot;
-	unsigned long	flags; // TODO unused?
-};
-
 struct EERIE_LINKED {
 	long lgroup; //linked to group n° if lgroup=-1 NOLINK
 	long lidx;
 	long lidx2;
 	EERIE_3DOBJ * obj;
-	EERIE_MOD_INFO modinfo;
 	Entity * io;
 };
 
@@ -355,8 +285,6 @@ struct EERIE_SELECTIONS {
 	std::string name;
 	std::vector<long> selected;
 };
-
-#define DRAWFLAG_HIGHLIGHT	1
 
 struct EERIE_FASTACCESS
 {
@@ -389,21 +317,24 @@ struct EERIE_FASTACCESS
 };
 
 /////////////////////////////////////////////////////////////////////////////////
+
+struct BoneTransform {
+	EERIE_QUAT quat;
+	Vec3f      trans;
+	Vec3f      scale;
+};
+
 struct EERIE_BONE
 {
 	long				nb_idxvertices;
 	long 		*		idxvertices;
 	EERIE_GROUPLIST *	original_group;
 	long				father;
-	EERIE_QUAT			quatanim;
-	Vec3f			transanim;
-	Vec3f			scaleanim;
-	EERIE_QUAT			quatlast;
-	Vec3f			translast;
-	Vec3f			scalelast;
-	EERIE_QUAT			quatinit;
-	Vec3f			transinit;
-	Vec3f			scaleinit;
+
+	BoneTransform anim;
+	BoneTransform last;
+	BoneTransform init;
+
 	Vec3f			transinit_global;
 };
 
@@ -421,13 +352,12 @@ struct EERIE_3DOBJ
 {
 	EERIE_3DOBJ()
 	{
-		point0 = pos = Vec3f::ZERO;
+		point0 = pos = Vec3f_ZERO;
 		angle = Anglef::ZERO;
 
 		origin = 0;
 		ident = 0;
 		nbgroups = 0;
-		drawflags = 0;
 
 		vertexlocal = NULL;
 
@@ -488,7 +418,6 @@ struct EERIE_3DOBJ
 	long origin;
 	long ident;
 	long nbgroups;
-	unsigned long drawflags;
 	EERIE_3DPAD * vertexlocal;
 	std::vector<EERIE_VERTEX> vertexlist;
 	std::vector<EERIE_VERTEX> vertexlist3;
@@ -530,7 +459,7 @@ struct EERIE_3DSCENE {
 };
 
 
-#ifdef BUILD_EDIT_LOADSAVE
+#if BUILD_EDIT_LOADSAVE
 const size_t MAX_SCENES = 64;
 struct EERIE_MULTI3DSCENE {
 	long nb_scenes;
@@ -540,47 +469,6 @@ struct EERIE_MULTI3DSCENE {
 	Vec3f point0;
 };
 #endif
-
-struct EERIE_FRAME
-{
-	long		num_frame;
-	long		flag;
-	int			master_key_frame;
-	short		f_translate; //int
-	short		f_rotate; //int
-	float		time;
-	Vec3f	translate;
-	EERIE_QUAT	quat;
-	audio::SampleId	sample;
-};
-
-struct EERIE_GROUP
-{
-	int		key;
-	Vec3f	translate;
-	EERIE_QUAT	quat;
-	Vec3f	zoom;
-};
-
-// Animation playing flags
-#define EA_LOOP			1	// Must be looped at end (indefinitely...)
-#define EA_REVERSE		2	// Is played reversed (from end to start)
-#define EA_PAUSED		4	// Is paused
-#define EA_ANIMEND		8	// Has just finished
-#define	EA_STATICANIM	16	// Is a static Anim (no movement offset returned).
-#define	EA_STOPEND		32	// Must Be Stopped at end.
-#define EA_FORCEPLAY	64	// User controlled... MUST be played...
-#define EA_EXCONTROL	128	// ctime externally set, no update.
-struct EERIE_ANIM
-{
-	float		anim_time;
-	unsigned long	flag;
-	long		nb_groups;
-	long		nb_key_frames;
-	EERIE_FRAME *	frames;
-	EERIE_GROUP  *  groups;
-	unsigned char *	voidgroups;
-};
 
 //-------------------------------------------------------------------------
 //Portal Data;
@@ -617,9 +505,12 @@ struct EERIE_ROOM_DATA {
 struct EERIE_PORTAL_DATA
 {
 	long nb_rooms;
+	inline long roomsize() {
+		return nb_rooms + 1;
+	}
+
 	EERIE_ROOM_DATA * room;
-	long nb_total; // of portals
-	EERIE_PORTALS * portals;
+	std::vector<EERIE_PORTALS> portals;
 };
 
 struct SMY_ZMAPPINFO
@@ -634,23 +525,19 @@ struct SMY_ARXMAT
 	unsigned long uslStartVertex;
 	unsigned long uslNbVertex;
 
-	unsigned long uslStartCull;
-	unsigned long uslNbIndiceCull;
+	enum TransparencyType {
+		Opaque = 0,
+		Blended,
+		Multiplicative,
+		Additive,
+		Subtractive
+	};
 
-	unsigned long uslStartCull_TNormalTrans;
-	unsigned long uslNbIndiceCull_TNormalTrans;
-
-	unsigned long uslStartCull_TMultiplicative;
-	unsigned long uslNbIndiceCull_TMultiplicative;
-
-	unsigned long uslStartCull_TAdditive;
-	unsigned long uslNbIndiceCull_TAdditive;
-
-	unsigned long uslStartCull_TSubstractive;
-	unsigned long uslNbIndiceCull_TSubstractive;
+	unsigned long offset[5];
+	unsigned long count[5];
 };
 
-extern long USE_PORTALS;
+extern bool USE_PORTALS;
 extern EERIE_PORTAL_DATA * portals;
 
 #endif // ARX_GRAPHICS_GRAPHICSTYPES_H

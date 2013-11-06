@@ -55,8 +55,6 @@ ZeniMax Media Inc., Suite 120, Rockville, Maryland 20850 USA.
 #include "graphics/texture/TextureStage.h"
 
 /*---------------------------------------------------------------------------------*/
-extern EERIE_CAMERA	Camera;
-/*---------------------------------------------------------------------------------*/
 #define		NBOLDPOS	10
 /*---------------------------------------------------------------------------------*/
 float		SpecialFadeDx;
@@ -116,49 +114,41 @@ int FX_FadeOUT(float a, int color, int colord)
 
 static float LastTime;
 
-bool FX_Blur(Cinematic * c, CinematicBitmap * tb)
+bool FX_Blur(Cinematic *c, CinematicBitmap *tb, EERIE_CAMERA &camera)
 {
-	int			nb;
-	Vec3f	* pos;
-	float	*	az;
-	float		alpha, dalpha;
-	int			col;
-
-	if (c->numbitmap < 0 || tb == 0)
+	if(c->numbitmap < 0 || !tb)
 		return false;
 
-	if (TotOldPos == NBOLDPOS)
-	{
+	if(TotOldPos == NBOLDPOS) {
 		TotOldPos--;
 		std::copy(OldPos + 1, OldPos + 1 + TotOldPos, OldPos);
 		memmove(OldAz, OldAz + 1, TotOldPos * 4);
 	}
 
-	if ((GetTimeKeyFramer() - LastTime) < 0.40f)
-	{
+	if((GetTimeKeyFramer() - LastTime) < 0.40f) {
 		LastTime = GetTimeKeyFramer();
 		OldPos[TotOldPos] = c->pos;
 		OldAz[TotOldPos] = c->angz;
 		TotOldPos++;
 	}
 
-	alpha = 32.f;
-	dalpha = (127.f / NBOLDPOS);
-	pos = OldPos;
-	az = OldAz;
-	nb = TotOldPos;
+	float alpha = 32.f;
+	float dalpha = (127.f / NBOLDPOS);
+	Vec3f *pos = OldPos;
+	float *az = OldAz;
+	int nb = TotOldPos;
 
-	while (nb)
-	{
-		Camera.pos = *pos;
-		SetTargetCamera(&Camera, Camera.pos.x, Camera.pos.y, 0.f);
-		Camera.angle.b = 0;
-		Camera.angle.g = *az;
-		PrepareCamera(&Camera);
+	while(nb) {
+		camera.orgTrans.pos = *pos;
+		camera.setTargetCamera(camera.orgTrans.pos.x, camera.orgTrans.pos.y, 0.f);
+		camera.angle.setPitch(0);
+		camera.angle.setRoll(*az);
+		PrepareCamera(&camera);
 
-		col = (int)alpha;
+		int col = (int)alpha;
 		col = (col << 24) | 0x00FFFFFF;
 		DrawGrille(&tb->grid, col, 0, NULL, &c->posgrille, c->angzgrille);
+
 		alpha += dalpha;
 		pos++;
 		az++;
@@ -181,8 +171,8 @@ bool FX_FlashBlanc(float w, float h, float speed, int color, float fps, float cu
 	
 	if (FlashAlpha == 0.f) FlashAlpha = 1.f;
 	
-	GRenderer->GetTextureStage(0)->SetColorOp(TextureStage::ArgDiffuse);
-	GRenderer->GetTextureStage(0)->SetAlphaOp(TextureStage::ArgDiffuse);
+	GRenderer->GetTextureStage(0)->setColorOp(TextureStage::ArgDiffuse);
+	GRenderer->GetTextureStage(0)->setAlphaOp(TextureStage::ArgDiffuse);
 	GRenderer->SetBlendFunc(Renderer::BlendSrcAlpha, Renderer::BlendOne);
 	
 	col = (int)(255.f * FlashAlpha);
@@ -222,11 +212,11 @@ bool SpecialFade(TextureContainer * mask, float ws, float h, float speed, float 
 
 	//tracer du mask
 	
-	GRenderer->GetTextureStage(0)->SetColorOp(TextureStage::OpModulate, TextureStage::ArgTexture, TextureStage::ArgDiffuse);
-	GRenderer->GetTextureStage(0)->DisableAlpha();
+	GRenderer->GetTextureStage(0)->setColorOp(TextureStage::OpModulate, TextureStage::ArgTexture, TextureStage::ArgDiffuse);
+	GRenderer->GetTextureStage(0)->disableAlpha();
 	GRenderer->SetBlendFunc(Renderer::BlendDstColor, Renderer::BlendZero);
 
-	GRenderer->GetTextureStage(0)->SetWrapMode(TextureStage::WrapRepeat);
+	GRenderer->GetTextureStage(0)->setWrapMode(TextureStage::WrapRepeat);
 
 	GRenderer->SetTexture(0, mask);
 
@@ -249,8 +239,8 @@ bool SpecialFade(TextureContainer * mask, float ws, float h, float speed, float 
 
 	EERIEDRAWPRIM(Renderer::TriangleStrip, v, 4);
 
-	GRenderer->GetTextureStage(0)->SetColorOp(TextureStage::ArgDiffuse);
-	GRenderer->GetTextureStage(0)->DisableAlpha();
+	GRenderer->GetTextureStage(0)->setColorOp(TextureStage::ArgDiffuse);
+	GRenderer->GetTextureStage(0)->disableAlpha();
 	GRenderer->SetBlendFunc(Renderer::BlendOne, Renderer::BlendZero);
 
 	GRenderer->ResetTexture(0);
@@ -288,7 +278,7 @@ bool SpecialFade(TextureContainer * mask, float ws, float h, float speed, float 
 		SpecialFadeDx = -1.f;
 	}
 
-	GRenderer->GetTextureStage(0)->SetWrapMode(TextureStage::WrapClamp);
+	GRenderer->GetTextureStage(0)->setWrapMode(TextureStage::WrapClamp);
 
 	return true;
 }
@@ -305,12 +295,12 @@ bool SpecialFadeR(TextureContainer * mask, float ws, float h, float speed, float
 	dv = (float)0.99999f * (h - 1) / mask->m_dwHeight;
 
 	//tracer du mask
-	GRenderer->GetTextureStage(0)->SetColorOp(TextureStage::OpModulate, TextureStage::ArgTexture, TextureStage::ArgDiffuse);
-	GRenderer->GetTextureStage(0)->DisableAlpha();
+	GRenderer->GetTextureStage(0)->setColorOp(TextureStage::OpModulate, TextureStage::ArgTexture, TextureStage::ArgDiffuse);
+	GRenderer->GetTextureStage(0)->disableAlpha();
 	
 	GRenderer->SetBlendFunc(Renderer::BlendDstColor, Renderer::BlendZero);
 
-	GRenderer->GetTextureStage(0)->SetWrapMode(TextureStage::WrapRepeat);
+	GRenderer->GetTextureStage(0)->setWrapMode(TextureStage::WrapRepeat);
 
 	GRenderer->SetTexture(0, mask);
 
@@ -345,8 +335,8 @@ bool SpecialFadeR(TextureContainer * mask, float ws, float h, float speed, float
 
 	EERIEDRAWPRIM(Renderer::TriangleStrip, v, 4);
 
-	GRenderer->GetTextureStage(0)->SetColorOp(TextureStage::ArgDiffuse);
-	GRenderer->GetTextureStage(0)->DisableAlpha();
+	GRenderer->GetTextureStage(0)->setColorOp(TextureStage::ArgDiffuse);
+	GRenderer->GetTextureStage(0)->disableAlpha();
 	GRenderer->SetBlendFunc(Renderer::BlendOne, Renderer::BlendZero);
 
 	GRenderer->ResetTexture(0);
@@ -384,7 +374,7 @@ bool SpecialFadeR(TextureContainer * mask, float ws, float h, float speed, float
 		SpecialFadeDx = -1.f;
 	}
 
-	GRenderer->GetTextureStage(0)->SetWrapMode(TextureStage::WrapClamp);
+	GRenderer->GetTextureStage(0)->setWrapMode(TextureStage::WrapClamp);
 
 	return true;
 }

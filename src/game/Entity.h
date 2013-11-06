@@ -48,14 +48,14 @@ ZeniMax Media Inc., Suite 120, Rockville, Maryland 20850 USA.
 #include <string>
 #include <vector>
 
+#include "animation/Animation.h"
 #include "audio/AudioTypes.h"
 #include "game/Damage.h" // TODO needed for DamageType
 #include "game/Spells.h" // TODO needed for Spell, Rune, SpellcastFlags
 #include "graphics/Color.h"
 #include "graphics/BaseGraphicsTypes.h"
 #include "io/resource/ResourcePath.h"
-#include "math/Vector2.h"
-#include "math/Vector3.h"
+#include "math/Vector.h"
 #include "math/Angle.h"
 #include "platform/Flags.h"
 #include "script/Script.h" // TODO remove this
@@ -83,19 +83,6 @@ struct IO_PHYSICS {
 	Vec3f targetpos;
 	Vec3f velocity;
 	Vec3f forces;
-};
-
-struct ANIM_USE {
-	ANIM_HANDLE * next_anim;
-	ANIM_HANDLE * cur_anim;
-	short altidx_next; // idx to alternate anims...
-	short altidx_cur; // idx to alternate anims...
-	long ctime;
-	unsigned long flags;
-	unsigned long nextflags;
-	long lastframe;
-	float pour;
-	long fr;
 };
 
 enum IOCollisionFlag {
@@ -213,7 +200,7 @@ enum GameFlag {
 	GFLAG_HIDEWEAPON        = (1<<12),
 	GFLAG_NOGORE            = (1<<13),
 	GFLAG_GOREEXPLODE       = (1<<14),
-	GFLAG_NOCOMPUTATION     = (1<<15),
+	GFLAG_NOCOMPUTATION     = (1<<15)
 };
 DECLARE_FLAGS(GameFlag, GameFlags)
 DECLARE_FLAGS_OPERATORS(GameFlags)
@@ -229,6 +216,11 @@ enum EntityVisilibity {
 	SHOW_FLAG_MEGAHIDE     = 8,
 	SHOW_FLAG_ON_PLAYER    = 9,
 	SHOW_FLAG_DESTROYED    = 255
+};
+
+struct AnimationBlendStatus {
+	long nb_lastanimvertex;
+	unsigned long lastanimtime;
 };
 
 class Entity {
@@ -255,13 +247,12 @@ public:
 	EERIE_3DOBJ * obj; // IO Mesh data
 	ANIM_HANDLE * anims[MAX_ANIMS]; // Object Animations
 	ANIM_USE animlayer[MAX_ANIM_LAYERS];
-	Vec3f * lastanimvertex; // Last Animation Positions of Vertex
-	long nb_lastanimvertex;
-	unsigned long lastanimtime;
+
+	AnimationBlendStatus animBlend;
 	
 	EERIE_3D_BBOX bbox3D;
-	Vec2s bbox1; // 2D bounding box1
-	Vec2s bbox2; // 2D bounding box2
+	EERIE_2D_BBOX bbox2D;
+
 	res::path usemesh; // Alternate Mesh/path
 	EERIE_3DOBJ * tweaky; // tweaked original obj backup
 	audio::SourceId sound;
@@ -327,7 +318,6 @@ public:
 	short flarecount;
 	short no_collide;
 	float invisibility;
-	float frameloss;
 	float basespeed;
 	
 	float speed_modif;
@@ -355,7 +345,7 @@ public:
 	
 	EntitySfxFlags sfx_flag;
 	std::vector<TWEAK_INFO> tweaks;
-	char secretvalue;
+	s8 secretvalue;
 	
 	std::string shop_category;
 	float shop_multiply;
@@ -364,6 +354,9 @@ public:
 	short inzone_show;
 	short summoner;
 	long spark_n_blood;
+
+	Color3f special_color;
+	Color3f highlightColor;
 	
 	/*!
 	 * Return the short name for this Object where only the name
@@ -419,7 +412,7 @@ private:
 
 // TODO move this somewhere else
 struct IO_FIXDATA {
-	char trapvalue;
+	s8 trapvalue;
 	char padd[3];
 };
 

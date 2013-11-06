@@ -53,14 +53,16 @@ ZeniMax Media Inc., Suite 120, Rockville, Maryland 20850 USA.
 #include "graphics/BaseGraphicsTypes.h"
 #include "graphics/Color.h"
 #include "io/resource/ResourcePath.h"
-#include "math/MathFwd.h"
-#include "math/Vector3.h"
+#include "math/Types.h"
+#include "math/Vector.h"
 #include "platform/Flags.h"
+
+#include "graphics/effects/Trail.h"
 
 struct EERIE_CAMERA;
 struct EERIE_3DOBJ;
 class Entity;
-class CRuban;
+class Trail;
 
 enum PathwayType {
 	PATHWAY_STANDARD = 0,
@@ -136,11 +138,7 @@ struct ARX_USE_PATH {
 struct MASTER_CAMERA_STRUCT {
 	long exist; // 2== want to change to want_vars...
 	Entity * io;
-	ARX_USE_PATH * aup;
-	EERIE_CAMERA * cam;
 	Entity * want_io;
-	ARX_USE_PATH * want_aup;
-	EERIE_CAMERA * want_cam;
 };
 
 enum PathMod {
@@ -154,7 +152,6 @@ DECLARE_FLAGS(PathMod, PathMods)
 DECLARE_FLAGS_OPERATORS(PathMods)
 
 extern MASTER_CAMERA_STRUCT MasterCamera;
-extern ARX_USE_PATH USE_CINEMATICS_PATH;
 extern ARX_PATH ** ARXpaths;
 #ifdef BUILD_EDITOR
 extern ARX_PATH * ARX_PATHS_FlyingOverAP;
@@ -162,7 +159,6 @@ extern ARX_PATH * ARX_PATHS_SelectedAP;
 extern long	ARX_PATHS_SelectedNum;
 extern long	ARX_PATHS_FlyingOverNum;
 #endif
-extern long USE_CINEMATICS_CAMERA;
 extern long	nbARXpaths;
 
 void ARX_PATH_UpdateAllZoneInOutInside();
@@ -189,7 +185,6 @@ DECLARE_FLAGS_OPERATORS(ThrownObjectFlags)
 struct ARX_THROWN_OBJECT {
 	ThrownObjectFlags flags;
 	Vec3f vector;
-	Vec3f upvect;
 	EERIE_QUAT quat;
 	Vec3f initial_position;
 	float velocity;
@@ -199,60 +194,20 @@ struct ARX_THROWN_OBJECT {
 	long source;
 	unsigned long creation_time;
 	float poisonous;
-	CRuban * pRuban;
+	Trail * pRuban;
 };
 
 const size_t MAX_THROWN_OBJECTS = 100;
 
 extern ARX_THROWN_OBJECT Thrown[MAX_THROWN_OBJECTS];
-extern long Thrown_Count;
 
-class CRuban {
-	
-private:
-	
-	short key;
-	int duration;
-	int currduration;
-	int iNumThrow;
-	
-	struct T_RUBAN {
-		int actif;
-		Vec3f pos;
-		int next;
-	};
-	T_RUBAN truban[2048];
-	
-	struct T_RUBAN_DEF {
-		int first;
-		int origin;
-		float size;
-		int dec;
-		float r, g, b;
-		float r2, g2, b2;
-	};
-	
-	int nbrubandef;
-	T_RUBAN_DEF trubandef[256];
-	
-	int GetFreeRuban(void);
-	void AddRuban(int * f, int dec);
-	void DrawRuban(int num, float size, int dec, float r, float g, float b, float r2, float g2, float b2);
-	
-public:
-	
-	void AddRubanDef(int origin, float size, int dec, float r, float g, float b, float r2, float g2, float b2);
-	void Create(int numinteractive, int duration);
-	void Update();
-	float Render();
-	
-};
+
 
 long ARX_THROWN_OBJECT_GetFree();
-long ARX_THROWN_OBJECT_Throw(long source, Vec3f * position, Vec3f * vect, Vec3f * upvect, EERIE_QUAT * quat, float velocity, float damages, float poisonous);
+long ARX_THROWN_OBJECT_Throw(long source, Vec3f * position, Vec3f * vect, EERIE_QUAT * quat, float velocity, float damages, float poisonous);
 void ARX_THROWN_OBJECT_KillAll();
 void ARX_THROWN_OBJECT_Manage(unsigned long time_offset);
-void EERIE_PHYSICS_BOX_Launch_NOCOL(Entity * io, EERIE_3DOBJ * obj, Vec3f * pos, Vec3f * vect, long flags = 0, Anglef * angle = NULL);
+void ARX_THROWN_OBJECT_Render();
 
 long ARX_PHYSICS_BOX_ApplyModel(EERIE_3DOBJ * obj, float framediff, float rubber, long source);
 

@@ -105,8 +105,8 @@ void ARX_INTERFACE_KillARKANE() {
 }
 
 static void DrawCenteredImage(TextureContainer * tc) {
-	EERIEDrawBitmap2(DANAECENTERX - (tc->m_dwWidth * 0.5f),
-	                 DANAECENTERY - (tc->m_dwHeight * 0.5f),
+	EERIEDrawBitmap2(g_size.center().x - (tc->m_dwWidth * 0.5f),
+					 g_size.center().y - (tc->m_dwHeight * 0.5f),
 	                 static_cast<float>((int)(tc->m_dwWidth)),
 	                 static_cast<float>((int)(tc->m_dwHeight)),
 	                 0.001f, tc, Color::white);
@@ -118,7 +118,7 @@ void ARX_INTERFACE_ShowLogo(TextureContainer * logo) {
 		return;
 	}
 	
-	GRenderer->GetTextureStage(0)->SetWrapMode(TextureStage::WrapClamp); 
+	GRenderer->GetTextureStage(0)->setWrapMode(TextureStage::WrapClamp); 
 	GRenderer->SetRenderState(Renderer::ColorKey, false);
 	
 	GRenderer->Clear(Renderer::ColorBuffer | Renderer::DepthBuffer);
@@ -130,7 +130,7 @@ void ARX_INTERFACE_ShowLogo(TextureContainer * logo) {
 	
 	GRenderer->EndScene();
 	
-	GRenderer->GetTextureStage(0)->SetWrapMode(TextureStage::WrapRepeat);
+	GRenderer->GetTextureStage(0)->setWrapMode(TextureStage::WrapRepeat);
 	GRenderer->SetRenderState(Renderer::ColorKey, true);
 }
 
@@ -175,8 +175,8 @@ void LoadLevelScreen(long num) {
 	if (Time::getElapsedMs(last_progress_bar_update) > 16 &&
 		 OLD_PROGRESS_BAR_COUNT != PROGRESS_BAR_COUNT)
 	{
-		GRenderer->GetTextureStage(0)->SetMinFilter(TextureStage::FilterLinear);
-		GRenderer->GetTextureStage(0)->SetMagFilter(TextureStage::FilterLinear);
+		GRenderer->GetTextureStage(0)->setMinFilter(TextureStage::FilterLinear);
+		GRenderer->GetTextureStage(0)->setMagFilter(TextureStage::FilterLinear);
 
 		float ratio = (PROGRESS_BAR_TOTAL > 0.f ? PROGRESS_BAR_COUNT / PROGRESS_BAR_TOTAL : 0); 
 
@@ -218,22 +218,22 @@ void LoadLevelScreen(long num) {
 			
 			Vec2f size = (num == 10) ? Vec2f(640, 480) : Vec2f(320, 390);
 			size *= scale;
-			EERIEDrawBitmap2(DANAECENTERX - size.x * 0.5f, DANAECENTERY - size.y * 0.5f,
+			EERIEDrawBitmap2(g_size.center().x - size.x * 0.5f, g_size.center().y - size.y * 0.5f,
 												size.x, size.y, 0.001f, tc, Color::white);
 			
 			GRenderer->SetRenderState(Renderer::ColorKey, true);
 		}
 		
 		if(pbar) {
-			float px = DANAECENTERX - 100 * scale;
-			float py = DANAECENTERY + ((num == 10) ? 221 : 35) * scale;
+			float px = g_size.center().x - 100 * scale;
+			float py = g_size.center().y + ((num == 10) ? 221 : 35) * scale;
 			float px2 = ratio * 200 * scale;
 			float py2 = 8 * scale;
 			EERIEDrawBitmap_uv(px, py, px2, py2, 0.f, pbar, Color::gray(1.0f), 0.f, 0.f, ratio, 1.f);
 		}
 		
 		GRenderer->EndScene();
-		mainApp->GetWindow()->showFrame();
+		mainApp->getWindow()->showFrame();
 		
 		OLD_PROGRESS_BAR_COUNT = PROGRESS_BAR_COUNT;
 		last_progress_bar_update = Time::getMs();
@@ -248,5 +248,5 @@ void LoadLevelScreen() {
 void ARX_INTERFACE_EndIntro()
 {
 	ARX_SOUND_MixerStop(ARX_SOUND_MixerGame);
-	ARX_MENU_Launch();
+	ARX_MENU_Launch(false);
 }

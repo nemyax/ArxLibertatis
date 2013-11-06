@@ -53,6 +53,8 @@ ZeniMax Media Inc., Suite 120, Rockville, Maryland 20850 USA.
 
 #include "Configure.h"
 
+#include "animation/Animation.h"
+
 #include "core/Application.h"
 #include "core/Config.h"
 #include "core/Core.h"
@@ -89,7 +91,6 @@ ZeniMax Media Inc., Suite 120, Rockville, Maryland 20850 USA.
 #include "util/Unicode.h"
 
 extern TextManager * pTextManage;
-extern Anglef ePlayerAngle;
 extern float Xratio, Yratio;
 extern ARX_INTERFACE_BOOK_MODE Book_Mode;
 extern long START_NEW_QUEST;
@@ -98,17 +99,15 @@ extern long BOOKBUTTON;
 extern long OLD_FLYING_OVER;
 extern long FLYING_OVER;
 extern long BOOKZOOM;
-extern long FRAME_COUNT;
 extern float ARXTimeMenu;
 extern float ARXOldTimeMenu;
-extern long NEED_SPECIAL_RENDEREND;
 extern bool bFadeInOut;
 extern bool bFade;
 extern int iFadeAction;
 extern float fFadeInOut;
-extern char SKIN_MOD;
-extern char QUICK_MOD;
 
+extern s8 SKIN_MOD;
+extern char QUICK_MOD;
 
 extern float ARXTimeMenu;
 extern float ARXOldTimeMenu;
@@ -214,6 +213,8 @@ void ARX_Menu_Resources_Create() {
 		
 		ARXmenu.mda->credits = arx_credits;
 		
+		ARXmenu.mda->credits += "\n\n\n" + arx_copyright;
+		
 		ARXmenu.mda->credits += "\n\n\n~ORIGINAL ARX FATALIS CREDITS:\n\n\n";
 		
 		ARXmenu.mda->credits += util::convertUTF16LEToUTF8(credits, credits + creditsSize);
@@ -268,7 +269,6 @@ void ARX_MENU_Clicked_NEWQUEST() {
 	ARX_PLAYER_Start_New_Quest();
 	Book_Mode = BOOKMODE_STATS;
 	player.skin = 0;
-	ePlayerAngle.b = -25.f;
 	ARX_PLAYER_Restore_Skin();
 	ARXmenu.currentmode = AMCM_NEWQUEST;
 }
@@ -276,7 +276,6 @@ void ARX_MENU_Clicked_NEWQUEST() {
 void ARX_MENU_NEW_QUEST_Clicked_QUIT() {
 	START_NEW_QUEST = 1;
 	REFUSE_GAME_RETURN = 0;
-	NEED_SPECIAL_RENDEREND = 1;
 	ARX_MENU_Clicked_QUIT();
 }
 
@@ -287,11 +286,13 @@ void ARX_MENU_Clicked_CREDITS() {
 }
 
 void ARX_MENU_Clicked_QUIT_GAME() {
-	mainApp->Quit();
+	mainApp->quit();
 }
 
-void ARX_MENU_Launch() {
+void ARX_MENU_Launch(bool allowResume) {
 	
+	REFUSE_GAME_RETURN = !allowResume;
+
 	arxtime.pause();
 
 	//Synchronize menu mixers with game mixers and switch between them
@@ -329,7 +330,7 @@ void ARX_Menu_Manage() {
 
 					arxtime.pause();
 					ARXTimeMenu=ARXOldTimeMenu=arxtime.get_updated();
-					ARX_MENU_Launch();
+					ARX_MENU_Launch(true);
 					bFadeInOut=false;	//fade out
 					bFade=true;			//active le fade
 					TRUE_PLAYER_MOUSELOOK_ON = false;
@@ -387,36 +388,24 @@ extern long PLAYER_INTERFACE_HIDE_COUNT;
 //-----------------------------------------------------------------------------
 bool ARX_Menu_Render() {
 	
-	if(ARXmenu.currentmode == AMCM_OFF) {
+	if(ARXmenu.currentmode == AMCM_OFF)
 		return false;
-	}
-
-	FRAME_COUNT = 0;
 
 	bool br = Menu2_Render();
 
-	if (br)
-	{
+	if(br)
 		return br;
-	}
 
-	if (ARXmenu.currentmode == AMCM_OFF)
-	{
+	if(ARXmenu.currentmode == AMCM_OFF)
 		return false;
-	}
 
-	if (GInput->getMouseButton(Mouse::Button_0))
-	{
+	if(GInput->getMouseButton(Mouse::Button_0)) {
 		EERIEMouseButton = 1;
 		LastMouseClick = 1;
-	}
-	else if (GInput->getMouseButton(Mouse::Button_1))
-	{
+	} else if(GInput->getMouseButton(Mouse::Button_1)) {
 		EERIEMouseButton = 2;
 		LastMouseClick = 2;
-	}
-	else
-	{
+	} else {
 		EERIEMouseButton = 0;
 	}
 
@@ -428,10 +417,8 @@ bool ARX_Menu_Render() {
 
 	//-------------------------------------------------------------------------
 
-	if ((ARXmenu.currentmode == AMCM_NEWQUEST) && (ARXmenu.mda))
-	{
-		if (ITC.Get("questbook") == NULL)
-		{
+	if(ARXmenu.currentmode == AMCM_NEWQUEST && ARXmenu.mda) {
+		if(ITC.Get("questbook") == NULL) {
 			ARX_Menu_Resources_Release(false);
 			ARX_Menu_Resources_Create();
 			
@@ -485,9 +472,8 @@ bool ARX_Menu_Render() {
 			ITC.Level = getLocalised("system_charsheet_player_lvl");
 			ITC.Xp = getLocalised("system_charsheet_player_xp");
 
-			ANIM_Set(&player.useanim, herowaitbook);
-
-			player.useanim.flags |= EA_LOOP;
+			ANIM_Set(&player.bookAnimation[0], herowaitbook);
+			player.bookAnimation[0].flags |= EA_LOOP;
 
 			ARXOldTimeMenu = ARXTimeMenu = arxtime.get_updated();
 			ARXDiffTimeMenu = 0;
@@ -496,14 +482,13 @@ bool ARX_Menu_Render() {
 		GRenderer->SetRenderState(Renderer::Fog, false);
 		GRenderer->SetRenderState(Renderer::AlphaBlending, false);
 
-		if (ARXmenu.mda->BookBackground != NULL)
-		{
+		if(ARXmenu.mda->BookBackground != NULL) {
 			GRenderer->SetRenderState(Renderer::AlphaBlending, false);
 			GRenderer->SetRenderState(Renderer::Fog, false);
 			GRenderer->SetRenderState(Renderer::DepthWrite, false);
 			GRenderer->SetRenderState(Renderer::DepthTest, false);
 
-			EERIEDrawBitmap2(0, 0, static_cast<float>(DANAESIZX), static_cast<float>(DANAESIZY), 0.9f, ARXmenu.mda->BookBackground, Color::white);
+			EERIEDrawBitmap2(0, 0, static_cast<float>(g_size.width()), static_cast<float>(g_size.height()), 0.9f, ARXmenu.mda->BookBackground, Color::white);
 		}
 
 		BOOKZOOM = 1;
@@ -511,11 +496,10 @@ bool ARX_Menu_Render() {
 		ARX_INTERFACE_ManageOpenedBook();
 
 
-		if (ARXmenu.mda)
-		{
+		if(ARXmenu.mda) {
 			long DONE = 0;
 
-			if ((player.Skill_Redistribute == 0) && (player.Attribute_Redistribute == 0))
+			if(player.Skill_Redistribute == 0 && player.Attribute_Redistribute == 0)
 				DONE = 1;
 
 			float ox, oy;
@@ -526,36 +510,32 @@ bool ARX_Menu_Render() {
 			Xratio = ox;
 			Yratio = oy;
 
-			if (!ARXmenu.mda->flyover[FLYING_OVER].empty() ) //=ARXmenu.mda->flyover[FLYING_OVER];
+			if(!ARXmenu.mda->flyover[FLYING_OVER].empty() ) //=ARXmenu.mda->flyover[FLYING_OVER];
 			{
-				if (FLYING_OVER != OLD_FLYING_OVER)
-				{
+				if(FLYING_OVER != OLD_FLYING_OVER) {
 
-					float fRandom	= rnd() * 2;
+					float fRandom = rnd() * 2;
 
 					int t = checked_range_cast<int>(fRandom);
-
 
 					pTextManage->Clear();
 					OLD_FLYING_OVER = FLYING_OVER;
 					UNICODE_ARXDrawTextCenteredScroll(hFontInGame,
-						(DANAESIZX * 0.5f),
+						(g_size.width() * 0.5f),
 						12,
-						(DANAECENTERX) * 0.82f,
+						(g_size.center().x) * 0.82f,
 						ARXmenu.mda->flyover[FLYING_OVER],
 						Color(232 + t, 204 + t, 143 + t),
 						1000,
 						0.01f,
 						2);
 				}
-			}
-			else
-			{
+			} else {
 				OLD_FLYING_OVER = -1;
 			}
 			
 			float fPosX = 0;
-			float fPosY = 313 * Yratio + (DANAESIZY - 313 * Yratio) * 0.70f;
+			float fPosY = 313 * Yratio + (g_size.height() - 313 * Yratio) * 0.70f;
 
 			float fSizeX = 100 * Xratio;
 			float fSizeY = 100 * Yratio;
@@ -564,10 +544,9 @@ bool ARX_Menu_Render() {
 
 			//---------------------------------------------------------------------
 			// Button QUICK GENERATION
-			fPosX = (DANAESIZX - (513 * Xratio)) * 0.5f;
+			fPosX = (g_size.width() - (513 * Xratio)) * 0.5f;
 
-			if (MouseInRect(fPosX, fPosY, fPosX + fSizeX + 50, fPosY + fSizeY))
-			{
+			if(MouseInRect(fPosX, fPosY, fPosX + fSizeX + 50, fPosY + fSizeY)) {
 				SpecialCursor = CURSOR_INTERACTION_ON;
 				FLYING_OVER = BUTTON_QUICK_GENERATION;
 
@@ -578,13 +557,10 @@ bool ARX_Menu_Render() {
 					int iSkin = player.skin;
 					ARX_MENU_CLICKSOUND();
 
-					if (bQuickGenFirstClick)
-					{
+					if(bQuickGenFirstClick) {
 						ARX_PLAYER_MakeAverageHero();
 						bQuickGenFirstClick = false;
-					}
-					else
-					{
+					} else {
 						ARX_PLAYER_QuickGeneration();
 					}
 
@@ -600,37 +576,20 @@ bool ARX_Menu_Render() {
 
 			//---------------------------------------------------------------------
 			// Button SKIN
-			fPosX = DANAESIZX * 0.5f;
+			fPosX = g_size.width() * 0.5f;
 
-			if (MouseInRect(fPosX, fPosY, fPosX + fSizeX, fPosY + fSizeY))
-			{
+			if(MouseInRect(fPosX, fPosY, fPosX + fSizeX, fPosY + fSizeY)) {
 				SpecialCursor = CURSOR_INTERACTION_ON;
 				FLYING_OVER = BUTTON_SKIN;
 
-				if ((!(EERIEMouseButton & 1)) && (LastMouseClick & 1))
-				{
+				if(!(EERIEMouseButton & 1) && (LastMouseClick & 1)) {
 					SKIN_MOD++;
 					BOOKZOOM = 1;
 					ARX_MENU_CLICKSOUND();
 					player.skin++;
 
-					if (player.skin > 3)  player.skin = 0;
-
-					switch (player.skin)
-					{
-						case 0:
-							ePlayerAngle.b = -25.f;
-							break;
-						case 1:
-							ePlayerAngle.b = -10.f;
-							break;
-						case 2:
-							ePlayerAngle.b = 20.f;
-							break;
-						case 3:
-							ePlayerAngle.b = 35.f;
-							break;
-					}
+					if(player.skin > 3)
+						player.skin = 0;
 
 					ARX_PLAYER_Restore_Skin();
 				}
@@ -644,32 +603,25 @@ bool ARX_Menu_Render() {
 
 			//---------------------------------------------------------------------
 			// Button DONE
-			fPosX = DANAESIZX - (DANAESIZX - 513 * Xratio) * 0.5f - 40 * Xratio;
+			fPosX = g_size.width() - (g_size.width() - 513 * Xratio) * 0.5f - 40 * Xratio;
 
-			if (MouseInRect(fPosX, fPosY, fPosX + fSizeX, fPosY + fSizeY))
-			{
-				if (DONE) SpecialCursor = CURSOR_INTERACTION_ON;
+			if(MouseInRect(fPosX, fPosY, fPosX + fSizeX, fPosY + fSizeY)) {
+				if(DONE)
+					SpecialCursor = CURSOR_INTERACTION_ON;
 
 				FLYING_OVER = BUTTON_DONE;
 
-				if ((DONE) && (!(EERIEMouseButton & 1)) && (LastMouseClick & 1))
-				{
-					if ((SKIN_MOD == 8) && (QUICK_MOD == 10))
-					{
+				if(DONE && !(EERIEMouseButton & 1) && (LastMouseClick & 1)) {
+					if(SKIN_MOD == 8 && QUICK_MOD == 10) {
 						SKIN_MOD = -2;
-					}
-					else if (SKIN_MOD == -1)
-					{
+					} else if(SKIN_MOD == -1) {
 						ARX_PLAYER_MakeSpHero();
 						player.skin = 4;
 						ARX_PLAYER_Restore_Skin();
 						SKIN_MOD = 0;
 						SP_HEAD = 1;
-					}
-					else
-					{
-						if (SP_HEAD)
-						{
+					} else {
+						if(SP_HEAD) {
 							player.skin = 4;
 							ARX_PLAYER_Restore_Skin();
 							SP_HEAD = 0;
@@ -681,49 +633,40 @@ bool ARX_Menu_Render() {
 						bFade = true;			//active le fade
 						iFadeAction = AMCM_OFF;
 					}
-				}
-				else
-				{
-					if (DONE)
+				} else {
+					if(DONE)
 						color = Color(255, 255, 255);
 					else
 						color = Color(192, 192, 192);
 				}
-
-			}
-			else
-			{
-				if (DONE)
+			} else {
+				if(DONE)
 					color = Color(232, 204, 143);
 				else
 					color = Color(192, 192, 192);
 			}
 
-			if (SKIN_MOD < 0)
+			if(SKIN_MOD < 0)
 				color = Color(255, 0, 255);
 
 			pTextManage->AddText(hFontMenu, ARXmenu.mda->str_button_done, static_cast<long>(fPosX), static_cast<long>(fPosY), color);
 		}
 	}
 
-	DynLight[0].pos.x = 0.f + GInput->getMousePosAbs().x - (DANAESIZX >> 1);
-	DynLight[0].pos.y = 0.f + GInput->getMousePosAbs().y - (DANAESIZY >> 1);
+	DynLight[0].pos.x = 0.f + GInput->getMousePosAbs().x - (g_size.width() >> 1);
+	DynLight[0].pos.y = 0.f + GInput->getMousePosAbs().y - (g_size.height() >> 1);
 
-	if (pTextManage)
-	{
-		pTextManage->Update(FrameDiff);
+	if(pTextManage) {
+		pTextManage->Update(framedelay);
 		pTextManage->Render();
 	}
 
-	if (ARXmenu.currentmode != AMCM_CREDITS)
+	if(ARXmenu.currentmode != AMCM_CREDITS)
 		ARX_INTERFACE_RenderCursor(1);
 
-	if (ARXmenu.currentmode == AMCM_NEWQUEST)
-	{
-		if (ProcessFadeInOut(bFadeInOut, 0.1f))
-		{
-			switch (iFadeAction)
-			{
+	if(ARXmenu.currentmode == AMCM_NEWQUEST) {
+		if(ProcessFadeInOut(bFadeInOut, 0.1f)) {
+			switch(iFadeAction) {
 				case AMCM_OFF:
 					arxtime.resume();
 					ARX_MENU_NEW_QUEST_Clicked_QUIT();
@@ -731,7 +674,7 @@ bool ARX_Menu_Render() {
 					bFade = false;
 					fFadeInOut = 0.f;
 
-					if (pTextManage)
+					if(pTextManage)
 						pTextManage->Clear();
 
 					break;

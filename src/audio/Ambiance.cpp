@@ -60,9 +60,9 @@ ZeniMax Media Inc., Suite 120, Rockville, Maryland 20850 USA.
 #include "io/resource/PakReader.h"
 #include "io/log/Logger.h"
 
-#include "math/MathFwd.h"
+#include "math/Types.h"
 #include "math/Random.h"
-#include "math/Vector3.h"
+#include "math/Vector.h"
 
 #include "platform/Flags.h"
 
@@ -70,7 +70,7 @@ ZeniMax Media Inc., Suite 120, Rockville, Maryland 20850 USA.
 
 using std::string;
 
-#ifdef UNITY_BUILD
+#if UNITY_BUILD
 // GCC complains if a type from an anonymous namespace
 // is used in a file that isn't the main source file
 #define ANONYMOUS_NAMESPACE extern "C++"
@@ -81,7 +81,6 @@ using std::string;
 ANONYMOUS_NAMESPACE {
 
 static const u32 AMBIANCE_FILE_SIGNATURE = 0x424d4147; //'GAMB'
-static const u32 AMBIANCE_FILE_VERSION_1001 = 0x01000001;
 static const u32 AMBIANCE_FILE_VERSION_1002 = 0x01000002;
 static const u32 AMBIANCE_FILE_VERSION_1003 = 0x01000003;
 static const u32 AMBIANCE_FILE_VERSION = AMBIANCE_FILE_VERSION_1003;

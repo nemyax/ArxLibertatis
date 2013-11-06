@@ -23,7 +23,7 @@
 #include <vector>
 
 #include "platform/Flags.h"
-#include "math/MathFwd.h"
+#include "math/Types.h"
 #include "graphics/Color.h"
 
 struct EERIEMATRIX;
@@ -40,6 +40,17 @@ template <class Vertex> class VertexBuffer;
 class Renderer {
 	
 public:
+	
+	class Listener {
+		
+	public:
+		
+		virtual ~Listener() { }
+		
+		virtual void onRendererInit(Renderer &) { }
+		virtual void onRendererShutdown(Renderer &) { }
+		
+	};
 	
 	//! Render states
 	enum RenderState {
@@ -126,7 +137,32 @@ public:
 	Renderer();
 	virtual ~Renderer();
 	
-	virtual void Initialize() = 0;
+	/*!
+	 * Basic renderer initialization.
+	 * Renderer will not be fully initialized until calling @ref afterResize().
+	 * Does *not* notify any listeners.
+	 */
+	virtual void initialize() = 0;
+	
+	//! * @return true if the renderer has been fully initialized and is ready for use.
+	bool isInitialized() { return m_initialized; }
+	
+	/*!
+	 * Indicate that the renderer's window will be resized and the renderer may need
+	 * to temporarily shutdown.
+	 * Will notify listeners if the renderer has been shut down.
+	 */
+	virtual void beforeResize(bool wasOrIsFullscreen) = 0;
+	
+	/*!
+	 * Indicate the renderer's window has been resized and the renderer may need to be
+	 * (re-)initialized.
+	 * Will notify listeners if the renderer wasn't already initialized.
+	 */
+	virtual void afterResize() = 0;
+	
+	void addListener(Listener * listener);
+	void removeListener(Listener * listener);
 	
 	// Scene begin/end...
 	virtual void BeginScene() = 0;
@@ -134,7 +170,6 @@ public:
 	
 	// Matrices
 	virtual void SetViewMatrix(const EERIEMATRIX & matView) = 0;
-	void SetViewMatrix(const Vec3f & vPosition, const Vec3f & vDir, const Vec3f & vUp);
 	virtual void GetViewMatrix(EERIEMATRIX & matView) const = 0;
 	virtual void SetProjectionMatrix(const EERIEMATRIX & matProj) = 0;
 	virtual void GetProjectionMatrix(EERIEMATRIX & matProj) const = 0;
@@ -184,9 +219,6 @@ public:
 	
 	virtual float GetMaxAnisotropy() const = 0;
 	
-	// Utilities...
-	virtual void DrawTexturedRect(float x, float y, float w, float h, float uStart, float vStart, float uEnd, float vEnd, Color color) = 0;
-	
 	virtual VertexBuffer<TexturedVertex> * createVertexBufferTL(size_t capacity, BufferUsage usage) = 0;
 	virtual VertexBuffer<SMY_VERTEX> * createVertexBuffer(size_t capacity, BufferUsage usage) = 0;
 	virtual VertexBuffer<SMY_VERTEX3> * createVertexBuffer3(size_t capacity, BufferUsage usage) = 0;
@@ -199,6 +231,16 @@ public:
 protected:
 	
 	std::vector<TextureStage *> m_TextureStages;
+	bool m_initialized;
+	
+	void onRendererInit();
+	void onRendererShutdown();
+	
+private:
+	
+	typedef std::vector<Listener *> Listeners;
+	
+	Listeners m_listeners; //! Listeners for renderer events
 	
 };
 

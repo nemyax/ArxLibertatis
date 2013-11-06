@@ -97,7 +97,7 @@ using audio::FLAG_PITCH;
 using audio::FLAG_RELATIVE;
 using audio::FLAG_AUTOFREE;
 
-extern long EXTERNALVIEW;
+extern bool EXTERNALVIEW;
 extern Entity * CAMERACONTROLLER;
 
 
@@ -265,6 +265,7 @@ SampleId SND_SPELL_ARMOR_START(INVALID_ID);
 SampleId SND_SPELL_ARMOR_END(INVALID_ID);
 SampleId SND_SPELL_ARMOR_LOOP(INVALID_ID);
 SampleId SND_SPELL_LOWER_ARMOR(INVALID_ID);
+SampleId SND_SPELL_LOWER_ARMOR_END(INVALID_ID);
 SampleId SND_SPELL_BLESS(INVALID_ID);
 SampleId SND_SPELL_COLD_PROTECTION_START(INVALID_ID);
 SampleId SND_SPELL_COLD_PROTECTION_LOOP(INVALID_ID);
@@ -307,6 +308,8 @@ SampleId SND_SPELL_IGNITE(INVALID_ID);
 SampleId SND_SPELL_INVISIBILITY_START(INVALID_ID);
 SampleId SND_SPELL_INVISIBILITY_END(INVALID_ID);
 SampleId SND_SPELL_LEVITATE_START(INVALID_ID);
+SampleId SND_SPELL_LEVITATE_LOOP(INVALID_ID);
+SampleId SND_SPELL_LEVITATE_END(INVALID_ID);
 SampleId SND_SPELL_LIGHTNING_START(INVALID_ID);
 SampleId SND_SPELL_LIGHTNING_LOOP(INVALID_ID);
 SampleId SND_SPELL_LIGHTNING_END(INVALID_ID);
@@ -336,6 +339,7 @@ SampleId SND_SPELL_REPEL_UNDEAD_LOOP(INVALID_ID);
 SampleId SND_SPELL_RUNE_OF_GUARDING(INVALID_ID);
 SampleId SND_SPELL_RUNE_OF_GUARDING_END(INVALID_ID);
 SampleId SND_SPELL_SLOW_DOWN(INVALID_ID);
+SampleId SND_SPELL_SLOW_DOWN_END(INVALID_ID);
 SampleId SND_SPELL_SPARK(INVALID_ID);
 SampleId SND_SPELL_SPEED_START(INVALID_ID);
 SampleId SND_SPELL_SPEED_LOOP(INVALID_ID);
@@ -520,7 +524,7 @@ long ARX_SOUND_PlaySFX(SourceId & sample_id, const Vec3f * position, float pitch
 	channel.volume = 1.0F;
 	
 	if(position) {
-		if(ACTIVECAM && distSqr(ACTIVECAM->pos, *position) > square(ARX_SOUND_REFUSE_DISTANCE)) {
+		if(ACTIVECAM && fartherThan(ACTIVECAM->orgTrans.pos, *position, ARX_SOUND_REFUSE_DISTANCE)) {
 			return -1;
 		}
 	}
@@ -540,7 +544,7 @@ long ARX_SOUND_PlaySFX(SourceId & sample_id, const Vec3f * position, float pitch
 		channel.position = *position;
 	} else {
 		channel.flags |= FLAG_RELATIVE;
-		channel.position = Vec3f::Z_AXIS;
+		channel.position = Vec3f_Z_AXIS;
 	}
 	
 	audio::samplePlay(sample_id, channel, loop);
@@ -586,15 +590,15 @@ long ARX_SOUND_PlayMenu(SourceId & sample_id, float pitch, SoundLoopMode loop) {
 
 void ARX_SOUND_IOFrontPos(const Entity * io, Vec3f & pos) {
 	if(io) {
-		pos.x = io->pos.x - EEsin(radians(MAKEANGLE(io->angle.b))) * 100.0F;
+		pos.x = io->pos.x - EEsin(radians(MAKEANGLE(io->angle.getPitch()))) * 100.0F;
 		pos.y = io->pos.y - 100.0F;
-		pos.z = io->pos.z + EEcos(radians(MAKEANGLE(io->angle.b))) * 100.0F;
+		pos.z = io->pos.z + EEcos(radians(MAKEANGLE(io->angle.getPitch()))) * 100.0F;
 	} else if(ACTIVECAM) {
-		pos.x = ACTIVECAM->pos.x - EEsin(radians(MAKEANGLE(ACTIVECAM->angle.b))) * 100.0F;
-		pos.y = ACTIVECAM->pos.y - 100.0F;
-		pos.z = ACTIVECAM->pos.z + EEcos(radians(MAKEANGLE(ACTIVECAM->angle.b))) * 100.0F;
+		pos.x = ACTIVECAM->orgTrans.pos.x - EEsin(radians(MAKEANGLE(ACTIVECAM->angle.getPitch()))) * 100.0F;
+		pos.y = ACTIVECAM->orgTrans.pos.y - 100.0F;
+		pos.z = ACTIVECAM->orgTrans.pos.z + EEcos(radians(MAKEANGLE(ACTIVECAM->angle.getPitch()))) * 100.0F;
 	} else {
-		pos = Vec3f::ZERO;
+		pos = Vec3f_ZERO;
 	}
 }
 
@@ -620,31 +624,23 @@ long ARX_SOUND_PlaySpeech(const res::path & name, const Entity * io)
 	channel.falloff.start = ARX_SOUND_DEFAULT_FALLSTART;
 	channel.falloff.end = ARX_SOUND_DEFAULT_FALLEND;
 
-	if (io)
-	{
-		if (((io == entities.player()) && !EXTERNALVIEW) ||
-		        (io->ioflags & IO_CAMERA && io == CAMERACONTROLLER))
+	if(io) {
+		if((io == entities.player() && !EXTERNALVIEW) || ((io->ioflags & IO_CAMERA) && io == CAMERACONTROLLER))
 			ARX_SOUND_IOFrontPos(io, channel.position);
 		else
-		{
 			channel.position = io->pos;
-		}
 
-		if(ACTIVECAM && distSqr(ACTIVECAM->pos, io->pos) > square(ARX_SOUND_REFUSE_DISTANCE)) {
+		if(ACTIVECAM && fartherThan(ACTIVECAM->orgTrans.pos, io->pos, ARX_SOUND_REFUSE_DISTANCE)) {
 			return ARX_SOUND_TOO_FAR; // TODO sample is never freed!
 		}
 
-		if (io->ioflags & IO_NPC && io->_npcdata->speakpitch != 1.f)
-		{
+		if(io->ioflags & IO_NPC && io->_npcdata->speakpitch != 1.f) {
 			channel.flags |= FLAG_PITCH;
 			channel.pitch = io->_npcdata->speakpitch;
 		}
-
-	}
-	else
-	{
+	} else {
 		channel.flags |= FLAG_RELATIVE;
-		channel.position = Vec3f::Z_AXIS * 100.f;
+		channel.position = Vec3f_Z_AXIS * 100.f;
 	}
 
 	audio::samplePlay(sample_id, channel);
@@ -682,7 +678,7 @@ long ARX_SOUND_PlayCollision(long mat1, long mat2, float volume, float power, Ve
 
 	if (position)
 	{
-		if (ACTIVECAM && distSqr(ACTIVECAM->pos, *position) > square(ARX_SOUND_REFUSE_DISTANCE))
+		if (ACTIVECAM && fartherThan(ACTIVECAM->orgTrans.pos, *position, ARX_SOUND_REFUSE_DISTANCE))
 			return -1;
 	}
 	
@@ -749,7 +745,7 @@ long ARX_SOUND_PlayCollision(const string & name1, const string & name2, float v
 	
 	if(position) {
 		channel.position = *position;
-		if(ACTIVECAM && fartherThan(ACTIVECAM->pos, *position, ARX_SOUND_REFUSE_DISTANCE)) {
+		if(ACTIVECAM && fartherThan(ACTIVECAM->orgTrans.pos, *position, ARX_SOUND_REFUSE_DISTANCE)) {
 			return -1;
 		}
 	} else {
@@ -790,14 +786,14 @@ long ARX_SOUND_PlayScript(const res::path & name, const Entity * io, float pitch
 	if(io) {
 		GetItemWorldPositionSound(io, &channel.position);
 		if(loop != ARX_SOUND_PLAY_LOOPED) {
-			if (ACTIVECAM && distSqr(ACTIVECAM->pos, channel.position) > square(ARX_SOUND_REFUSE_DISTANCE)) {
+			if (ACTIVECAM && fartherThan(ACTIVECAM->orgTrans.pos, channel.position, ARX_SOUND_REFUSE_DISTANCE)) {
 				// TODO the sample will never be freed!
 				return ARX_SOUND_TOO_FAR;
 			}
 		}
 	} else {
 		channel.flags |= FLAG_RELATIVE;
-		channel.position = Vec3f::Z_AXIS * 100.f;
+		channel.position = Vec3f_Z_AXIS * 100.f;
 	}
 	
 	if(pitch != 1.0F) {
@@ -812,7 +808,8 @@ long ARX_SOUND_PlayScript(const res::path & name, const Entity * io, float pitch
 
 long ARX_SOUND_PlayAnim(SourceId & sample_id, const Vec3f * position)
 {
-	if (!bIsActive || sample_id == INVALID_ID) return INVALID_ID;
+	if(!bIsActive || sample_id == INVALID_ID)
+		return INVALID_ID;
 
 	audio::Channel channel;
 
@@ -821,7 +818,7 @@ long ARX_SOUND_PlayAnim(SourceId & sample_id, const Vec3f * position)
 	channel.volume = 1.0F;
 
 	if(position) {
-		if(ACTIVECAM && fartherThan(ACTIVECAM->pos, *position, ARX_SOUND_REFUSE_DISTANCE)) {
+		if(ACTIVECAM && fartherThan(ACTIVECAM->orgTrans.pos, *position, ARX_SOUND_REFUSE_DISTANCE)) {
 			return -1;
 		}
 		channel.flags |= FLAG_POSITION | FLAG_REVERBERATION | FLAG_FALLOFF;
@@ -858,17 +855,13 @@ long ARX_SOUND_PlayCinematic(const res::path & name, bool isSpeech) {
 	channel.falloff.end = ARX_SOUND_DEFAULT_FALLEND;
 	
 	if (ACTIVECAM) {
-		Vec3f front, up;
-		float t;
-		t = radians(MAKEANGLE(ACTIVECAM->angle.b));
-		front.x = -EEsin(t);
-		front.y = 0.f;
-		front.z = EEcos(t);
-		front.normalize();
-		up.x = 0.f;
-		up.y = 1.f;
-		up.z = 0.f;
-		ARX_SOUND_SetListener(&ACTIVECAM->pos, &front, &up);
+		float t = radians(MAKEANGLE(ACTIVECAM->angle.getPitch()));
+		Vec3f front(-EEsin(t), 0.f, EEcos(t));
+		front = glm::normalize(front);
+
+		//TODO Hardcoded up vector
+		Vec3f up(0.f, 1.f, 0.f);
+		ARX_SOUND_SetListener(&ACTIVECAM->orgTrans.pos, &front, &up);
 	}
 	
 	ARX_SOUND_IOFrontPos(NULL, channel.position); 
@@ -926,13 +919,10 @@ void ARX_SOUND_RefreshSpeechPosition(SourceId & sample_id, const Entity * io) {
 	}
 	
 	Vec3f position;
-	if(io) {
-		if((io == entities.player() && !EXTERNALVIEW)
-		   || ((io->ioflags & IO_CAMERA) && io == CAMERACONTROLLER)) {
-			ARX_SOUND_IOFrontPos(io, position);
-		} else {
-			position = io->pos;
-		}
+	if((io == entities.player() && !EXTERNALVIEW) || ((io->ioflags & IO_CAMERA) && io == CAMERACONTROLLER)) {
+		ARX_SOUND_IOFrontPos(io, position);
+	} else {
+		position = io->pos;
 	}
 	
 	audio::setSamplePosition(sample_id, position);
@@ -1094,97 +1084,6 @@ AmbianceId ARX_SOUND_PlayMenuAmbiance(const res::path & ambiance_name) {
 	return ambiance_menu;
 }
 
-static long nbelems = 0;
-static char ** elems = NULL;
-static long * numbers = NULL;
-
-void ARX_SOUND_FreeAnimSamples() {
-	
-	if(elems) {
-		for(long i = 0; i < nbelems; i++) {
-			free(elems[i]), elems[i] = NULL;
-		}
-		free(elems), elems = NULL;
-	}
-	nbelems = 0;
-	
-	free(numbers), numbers = NULL;
-}
-
-extern ANIM_HANDLE animations[];
-void ARX_SOUND_PushAnimSamples()
-{
-	ARX_SOUND_FreeAnimSamples();
-
-	long number = 0;
-
-	for(size_t i = 0; i < MAX_ANIMATIONS; i++) {
-		
-		if (!animations[i].path.empty())
-		{
-			for (long j = 0; j < animations[i].alt_nb; j++)
-			{
-				EERIE_ANIM * anim = animations[i].anims[j];
-
-				for (long k = 0; k < anim->nb_key_frames; k++)
-				{
-					number++;
-
-					if (anim->frames[k].sample != -1)
-					{
-						res::path dest;
-						audio::getSampleName(anim->frames[k].sample, dest);
-						if(!dest.empty()) {
-							elems = (char **)realloc(elems, sizeof(char *) * (nbelems + 1));
-							elems[nbelems] = strdup(dest.string().c_str());
-							numbers = (long *)realloc(numbers, sizeof(long) * (nbelems + 1));
-							numbers[nbelems] = number;
-							nbelems++;
-						}
-					}
-				}
-			}
-		}
-	}
-}
-
-void ARX_SOUND_PopAnimSamples()
-{
-	if ((!elems) ||
-	        (!bIsActive))
-	{
-		return;
-	}
-
-	long curelem = 0;
-	long number = 0;
-
-	for(size_t i = 0; i < MAX_ANIMATIONS; i++) {
-		
-		if (!animations[i].path.empty())
-		{
-			for (long j = 0; j < animations[i].alt_nb; j++)
-			{
-				EERIE_ANIM * anim = animations[i].anims[j];
-
-				for (long k = 0; k < anim->nb_key_frames; k++)
-				{
-					number++;
-
-					if (number == numbers[curelem]) 
-					{
-						arx_assert(elems[curelem] != NULL);
-						anim->frames[k].sample = audio::createSample(elems[curelem++]);
-					}
-				}
-			}
-		}
-	}
-
-
-	ARX_SOUND_FreeAnimSamples();
-}
-
 char * ARX_SOUND_AmbianceSavePlayList(size_t & size) {
 	
 	unsigned long count(0);
@@ -1333,6 +1232,7 @@ static void ARX_SOUND_CreateStaticSamples() {
 	SND_SPELL_ARMOR_END                = audio::createSample("magic_spell_armor_end.wav");
 	SND_SPELL_ARMOR_LOOP               = audio::createSample("magic_spell_armor_loop.wav");
 	SND_SPELL_LOWER_ARMOR              = audio::createSample("magic_spell_decrease_armor.wav");
+	SND_SPELL_LOWER_ARMOR_END          = audio::createSample("magic_spell_lower_armor.wav");
 	SND_SPELL_BLESS                    = audio::createSample("magic_spell_bless.wav");
 	SND_SPELL_COLD_PROTECTION_START    = audio::createSample("magic_spell_cold_protection.wav");
 	SND_SPELL_COLD_PROTECTION_LOOP     = audio::createSample("magic_spell_cold_protection_loop.wav");
@@ -1374,6 +1274,8 @@ static void ARX_SOUND_CreateStaticSamples() {
 	SND_SPELL_INVISIBILITY_START       = audio::createSample("magic_spell_invisibilityon.wav");
 	SND_SPELL_INVISIBILITY_END         = audio::createSample("magic_spell_invisibilityoff.wav");
 	SND_SPELL_LEVITATE_START           = audio::createSample("magic_spell_levitate_start.wav");
+	SND_SPELL_LEVITATE_LOOP            = audio::createSample("magic_spell_levitate_loop.wav");
+	SND_SPELL_LEVITATE_END             = audio::createSample("magic_spell_levitate_end.wav");
 	SND_SPELL_LIGHTNING_START          = audio::createSample("magic_spell_lightning_start.wav");
 	SND_SPELL_LIGHTNING_LOOP           = audio::createSample("magic_spell_lightning_loop.wav");
 	SND_SPELL_LIGHTNING_END            = audio::createSample("magic_spell_lightning_end.wav");
@@ -1401,6 +1303,7 @@ static void ARX_SOUND_CreateStaticSamples() {
 	SND_SPELL_RUNE_OF_GUARDING         = audio::createSample("magic_spell_rune_of_guarding.wav");
 	SND_SPELL_RUNE_OF_GUARDING_END     = audio::createSample("magic_spell_rune_of_guarding_explode.wav");
 	SND_SPELL_SLOW_DOWN                = audio::createSample("magic_spell_slow_down.wav");
+	SND_SPELL_SLOW_DOWN_END            = audio::createSample("magic_spell_slow_down_end.wav");
 	SND_SPELL_SPARK                    = audio::createSample("sfx_spark.wav");
 	SND_SPELL_SPEED_START              = audio::createSample("magic_spell_speedstart.wav");
 	SND_SPELL_SPEED_LOOP               = audio::createSample("magic_spell_speed.wav");
@@ -1480,6 +1383,7 @@ static void ARX_SOUND_ReleaseStaticSamples() {
 	SND_SPELL_ARMOR_END		= INVALID_ID;
 	SND_SPELL_ARMOR_LOOP	= INVALID_ID;
 	SND_SPELL_LOWER_ARMOR = INVALID_ID;
+	SND_SPELL_LOWER_ARMOR_END = INVALID_ID;
 	SND_SPELL_BLESS = INVALID_ID;
 	SND_SPELL_COLD_PROTECTION_START = INVALID_ID;
 	SND_SPELL_COLD_PROTECTION_LOOP = INVALID_ID;
@@ -1522,6 +1426,8 @@ static void ARX_SOUND_ReleaseStaticSamples() {
 	SND_SPELL_INVISIBILITY_START = INVALID_ID;
 	SND_SPELL_INVISIBILITY_END = INVALID_ID;
 	SND_SPELL_LEVITATE_START = INVALID_ID;
+	SND_SPELL_LEVITATE_LOOP = INVALID_ID;
+	SND_SPELL_LEVITATE_END = INVALID_ID;
 	SND_SPELL_LIGHTNING_START = INVALID_ID;
 	SND_SPELL_LIGHTNING_LOOP = INVALID_ID;
 	SND_SPELL_LIGHTNING_END = INVALID_ID;
@@ -1549,6 +1455,7 @@ static void ARX_SOUND_ReleaseStaticSamples() {
 	SND_SPELL_RUNE_OF_GUARDING = INVALID_ID;
 	SND_SPELL_RUNE_OF_GUARDING_END = INVALID_ID;
 	SND_SPELL_SLOW_DOWN = INVALID_ID;
+	SND_SPELL_SLOW_DOWN_END = INVALID_ID;
 	SND_SPELL_SPARK = INVALID_ID;
 	SND_SPELL_SPEED_START = INVALID_ID;
 	SND_SPELL_SPEED_LOOP = INVALID_ID;

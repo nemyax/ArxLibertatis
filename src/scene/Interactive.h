@@ -53,8 +53,7 @@ ZeniMax Media Inc., Suite 120, Rockville, Maryland 20850 USA.
 #include "game/Entity.h"
 #include "game/EntityId.h"
 #include "graphics/data/MeshManipulation.h"
-#include "math/Vector2.h"
-#include "math/Vector3.h"
+#include "math/Vector.h"
 #include "platform/Flags.h"
 
 #include "Configure.h"
@@ -129,7 +128,7 @@ void ARX_INTERACTIVE_DestroyIO(Entity * ioo);
 void ARX_INTERACTIVE_MEMO_TWEAK(Entity * io, TweakType type, const res::path & param1, const res::path & param2);
 void ARX_INTERACTIVE_APPLY_TWEAK_INFO(Entity * io);
 bool ARX_INTERACTIVE_USEMESH(Entity * io, const res::path & temp);
-void ARX_INTERACTIVE_Teleport(Entity * io, Vec3f * target, long flags = 0);
+void ARX_INTERACTIVE_Teleport(Entity * io, Vec3f * target, bool flag = false);
 
 bool IsEquipedByPlayer(const Entity * io);
 void CleanScriptLoadedIO();
@@ -137,13 +136,16 @@ void PrepareIOTreatZone(long flag = 0);
 
 void LinkObjToMe(Entity * io, Entity * io2, const std::string & attach);
 
+void ARX_INTERACTIVE_DestroyIOdelayed(Entity * entity);
+void ARX_INTERACTIVE_DestroyIOdelayedExecute();
+
 /* TODO remove
  * ValidIONum and ValidIOAddress are fundamentally flawed and vulnerable to
  * index / address aliasing as both indices and memory addresses can be reused.
  *
  * We should instead use a proper weak pointer!
  */
-long ValidIONum(long num);
+bool ValidIONum(long num);
 long ValidIOAddress(const Entity * io);
 
 void RestoreInitialIOStatusOfIO(Entity * io);
@@ -197,21 +199,17 @@ Entity * GetFirstInterAtPos(Vec2s * pos, long flag = 0, Vec3f * _pRef = NULL, En
  * Creates an IO Ident for added object if necessary
  * @param flags can be IO_IMMEDIATELOAD (1) to FORCE loading
  */
-Entity * AddInteractive(const res::path & classPath,
-                        EntityInstance instance = -1,
-                        AddInteractiveFlags flags = 0);
-Entity * AddItem(const res::path & classPath, EntityInstance instance = -1,
-                 AddInteractiveFlags flags = 0);
-Entity * AddNPC(const res::path & classPath, EntityInstance instance = -1,
-                AddInteractiveFlags flags = 0);
-Entity * AddFix(const res::path & classPath, EntityInstance instance = -1,
-                AddInteractiveFlags flags = 0);
+Entity * AddInteractive(const res::path & classPath, EntityInstance instance = -1, AddInteractiveFlags flags = 0);
+Entity * AddItem(const res::path & classPath, EntityInstance instance = -1, AddInteractiveFlags flags = 0);
+Entity * AddNPC(const res::path & classPath, EntityInstance instance = -1, AddInteractiveFlags flags = 0);
+Entity * AddFix(const res::path & classPath, EntityInstance instance = -1, AddInteractiveFlags flags = 0);
 
 void UpdateCameras();
 
 Entity * InterClick(Vec2s * pos);
  
-void RenderInter(float from, float to);
+void UpdateInter();
+void RenderInter();
 void SetWeapon_On(Entity * io);
  
 void Prepare_SetWeapon(Entity * io, const res::path & temp);
@@ -248,5 +246,7 @@ void RestoreAllIOInitPos();
 void ARX_HALO_SetToNative(Entity * io);
 void ARX_INTERACTIVE_ActivatePhysics(long t);
 void ResetVVPos(Entity * io);
+
+void UpdateGoldObject(Entity * io);
 
 #endif // ARX_SCENE_INTERACTIVE_H

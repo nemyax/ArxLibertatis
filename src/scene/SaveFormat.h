@@ -182,12 +182,12 @@ struct SavedMapMarkerData {
 	s32 lvl;
 	char name[STRING_SIZE];
 	
-	/* implicit */ SavedMapMarkerData(const MAPMARKER_DATA & b) {
-		x = b.x;
-		y = b.y;
-		lvl = b.lvl;
-		arx_assert(STRING_SIZE > b.name.length());
-		strcpy(name, b.name.c_str());
+	/* implicit */ SavedMapMarkerData(const MiniMap::MapMarkerData &b) {
+		x = b.m_x;
+		y = b.m_y;
+		lvl = b.m_lvl;
+		arx_assert(STRING_SIZE > b.m_name.length());
+		strncpy(name, b.m_name.c_str(), STRING_SIZE);
 	}
 	
 };
@@ -200,7 +200,7 @@ struct SavedCylinder {
 	
 	inline operator EERIE_CYLINDER() const {
 		EERIE_CYLINDER a;
-		a.origin = origin, a.radius = radius, a.height = height;
+		a.origin = origin.toVec3(), a.radius = radius, a.height = height;
 		return a;
 	}
 	
@@ -222,10 +222,10 @@ struct SavedIOPhysics {
 	inline operator IO_PHYSICS() const {
 		IO_PHYSICS a;
 		a.cyl = cyl;
-		a.startpos = startpos;
-		a.targetpos = targetpos;
-		a.velocity = velocity;
-		a.forces = forces;
+		a.startpos = startpos.toVec3();
+		a.targetpos = targetpos.toVec3();
+		a.velocity = velocity.toVec3();
+		a.forces = forces.toVec3();
 		return a;
 	}
 	
@@ -257,32 +257,32 @@ struct SavedMiniMap {
 	f32 height;
 	u8 revealed[MAX_X][MAX_Z];
 	
-	inline operator MINI_MAP_DATA() const {
-		MINI_MAP_DATA a;
-		a.tc = NULL;
-		a.offsetx = offsetx;
-		a.offsety = offsety;
-		a.xratio = xratio;
-		a.yratio = yratio;
-		a.width = width;
-		a.height = height;
+	inline operator MiniMap::MiniMapData() const {
+		MiniMap::MiniMapData a;
+		a.m_texContainer = NULL;
+		a.m_offsetX = offsetx;
+		a.m_offsetY = offsety;
+		a.m_ratioX = xratio;
+		a.m_ratioY = yratio;
+		a.m_width = width;
+		a.m_height = height;
 		BOOST_STATIC_ASSERT(SavedMiniMap::MAX_X == MINIMAP_MAX_X);
 		BOOST_STATIC_ASSERT(SavedMiniMap::MAX_Z == MINIMAP_MAX_Z);
-		std::copy(&revealed[0][0], &revealed[0][0] + (SavedMiniMap::MAX_X * SavedMiniMap::MAX_Z), &a.revealed[0][0]);
+		std::copy(&revealed[0][0], &revealed[0][0] + (SavedMiniMap::MAX_X * SavedMiniMap::MAX_Z), &a.m_revealed[0][0]);
 		return a;
 	}
 	
-	inline SavedMiniMap & operator=(const MINI_MAP_DATA & b) {
+	inline SavedMiniMap & operator=(const MiniMap::MiniMapData & b) {
 		padding = 0;
-		offsetx = b.offsetx;
-		offsety = b.offsety;
-		xratio = b.xratio;
-		yratio = b.yratio;
-		width = b.width;
-		height = b.height;
+		offsetx = b.m_offsetX;
+		offsety = b.m_offsetY;
+		xratio = b.m_ratioX;
+		yratio = b.m_ratioY;
+		width = b.m_width;
+		height = b.m_height;
 		BOOST_STATIC_ASSERT(SavedMiniMap::MAX_X == MINIMAP_MAX_X);
 		BOOST_STATIC_ASSERT(SavedMiniMap::MAX_Z == MINIMAP_MAX_Z);
-		std::copy(&b.revealed[0][0], &b.revealed[0][0] + (SavedMiniMap::MAX_X * SavedMiniMap::MAX_Z), &revealed[0][0]);
+		std::copy(&b.m_revealed[0][0], &b.m_revealed[0][0] + (SavedMiniMap::MAX_X * SavedMiniMap::MAX_Z), &revealed[0][0]);
 		return *this;
 	}
 	
@@ -458,6 +458,7 @@ struct ARX_CHANGELEVEL_VARIABLE_SAVE {
 	char name[SIZE_ID];
 };
 
+// TODO Remove
 struct SavedModInfo {
 	
 	s32 link_origin;
@@ -465,26 +466,6 @@ struct SavedModInfo {
 	SavedVec3 scale;
 	SavedAnglef rot;
 	u32 flags;
-	
-	inline operator EERIE_MOD_INFO() const {
-		EERIE_MOD_INFO a;
-		a.link_origin = link_origin;
-		a.link_position = link_position;
-		a.scale = scale;
-		a.rot = rot;
-		a.flags = flags;
-		return a;
-	}
-	
-	inline SavedModInfo & operator=(const EERIE_MOD_INFO & b) {
-		link_origin = b.link_origin;
-		link_position = b.link_position;
-		scale = b.scale;
-		rot = b.rot;
-		flags = b.flags;
-		return *this;
-	}
-	
 };
 
 struct IO_LINKED_DATA {
@@ -517,8 +498,8 @@ struct SavedAnimUse {
 		a.altidx_next = altidx_next;
 		a.altidx_cur = altidx_cur;
 		a.ctime = ctime;
-		a.flags = flags;
-		a.nextflags = nextflags;
+		a.flags = AnimUseType::load(flags);
+		a.nextflags = AnimUseType::load(nextflags);
 		a.lastframe = lastframe;
 		a.pour = pour;
 		a.fr = fr;
@@ -592,7 +573,7 @@ struct SavedHalo {
 		a.radius = radius;
 		a.flags = HaloFlags::load(flags); // TODO save/load flags
 		a.dynlight = dynlight;
-		a.offset = offset;
+		a.offset = offset.toVec3();
 		return a;
 	}
 	
@@ -654,7 +635,7 @@ struct ARX_CHANGELEVEL_IO_SAVE {
 	s32 system_flags;
 	f32 basespeed;
 	f32 speed_modif;
-	f32 frameloss;
+	f32 frameloss; // TODO remove
 	SavedSpellcastData spellcast_data;
 	
 	f32 rubber;
@@ -680,7 +661,7 @@ struct ARX_CHANGELEVEL_IO_SAVE {
 	s16 Tweak_nb;
 	s16 padd;
 	SavedHalo halo;
-	char secretvalue;
+	s8 secretvalue;
 	char paddd[3];
 	char shop_category[128];
 	f32 shop_multiply;
@@ -898,7 +879,7 @@ struct ARX_CHANGELEVEL_ITEM_IO_SAVE {
 };
 
 struct ARX_CHANGELEVEL_FIX_IO_SAVE {
-	char trapvalue;
+	s8 trapvalue;
 	char padd[3];
 	s32 paddd[64]; // new...
 };
@@ -1011,16 +992,15 @@ struct SavedTransform {
 	f32 ysin;
 	f32 xsin;
 	f32 xcos;
-	f32 use_focal;
+	f32 use_focal; //TODO Remove
 	f32 xmod;
 	f32 ymod;
 	f32 zmod;
 	
 	inline operator EERIE_TRANSFORM() const {
 		EERIE_TRANSFORM a;
-		a.pos = pos;
+		a.pos = pos.toVec3();
 		a.ycos = ycos, a.ysin = ysin, a.xsin = xsin, a.xcos = xcos;
-		a.use_focal = use_focal;
 		a.mod.x = xmod, a.mod.y = ymod;
 		return a;
 	}
@@ -1028,7 +1008,7 @@ struct SavedTransform {
 	inline SavedTransform & operator=(const EERIE_TRANSFORM & b) {
 		pos = b.pos;
 		ycos = b.ycos, ysin = b.ysin, xsin = b.xsin, xcos = b.xcos;
-		use_focal = b.use_focal;
+		use_focal = 0.f;
 		xmod = b.mod.x, ymod = b.mod.y, zmod = 0.f;
 		return *this;
 	}
@@ -1046,14 +1026,14 @@ struct SavedCamera {
 	f32 Zcos;
 	f32 Zsin;
 	f32 focal;
-	f32 use_focal;
-	f32 Zmul;
-	f32 posleft;
-	f32 postop;
+	f32 use_focal; //TODO Remove
+	f32 Zmul; //TODO Remove
+	f32 posleft; //TODO Remove
+	f32 postop; //TODO Remove
 	
 	f32 xmod;
 	f32 ymod;
-	SavedMatrix matrix;
+	SavedMatrix matrix; //TODO Remove
 	SavedAnglef angle;
 	
 	SavedVec3 d_pos;
@@ -1062,25 +1042,25 @@ struct SavedCamera {
 	SavedVec3 lastpos;
 	SavedVec3 translatetarget;
 	s32 lastinfovalid;
-	SavedVec3 norm;
+	SavedVec3 norm; //TODO Remove
 	SavedColor fadecolor;
 	SavedRect clip;
-	f32 clipz0;
-	f32 clipz1;
+	f32 clipz0; //TODO Remove
+	f32 clipz1; //TODO Remove
 	s32 centerx;
 	s32 centery;
 	
 	f32 smoothing;
 	f32 AddX;
 	f32 AddY;
-	s32 Xsnap;
-	s32 Zsnap;
-	f32 Zdiv;
+	s32 Xsnap; //TODO Remove
+	s32 Zsnap; //TODO Remove
+	f32 Zdiv; //TODO Remove
 	
 	s32 clip3D;
-	s32 type;
+	s32 type; //TODO Remove
 	s32 bkgcolor;
-	s32 nbdrawn;
+	s32 nbdrawn; //TODO Remove
 	f32 cdepth;
 	
 	SavedAnglef size;
@@ -1089,34 +1069,23 @@ struct SavedCamera {
 		
 		EERIE_CAMERA a;
 		
-		a.transform = transform;
-		a.pos = pos;
-		a.Ycos = Ycos, a.Ysin = Ysin;
-		a.Xcos = Xcos, a.Xsin = Xsin;
-		a.Zcos = Zcos, a.Zsin = Zsin;
-		a.focal = focal, a.use_focal = use_focal;
-		a.Zmul = Zmul;
-		a.pos2.x = posleft, a.pos2.y = postop;
+		a.orgTrans = transform;
+		a.orgTrans.zcos = Zcos;
+		a.orgTrans.zsin = Zsin;
+		a.focal = focal;
 		
-		a.matrix = matrix;
 		a.angle = angle;
 		
-		a.d_pos = d_pos, a.d_angle = d_angle;
-		a.lasttarget = lasttarget, a.lastpos = lastpos;
-		a.translatetarget = translatetarget;
+		a.d_pos = d_pos.toVec3(), a.d_angle = d_angle;
+		a.lasttarget = lasttarget.toVec3(), a.lastpos = lastpos.toVec3();
+		a.translatetarget = translatetarget.toVec3();
 		a.lastinfovalid = lastinfovalid != 0;
-		a.norm = norm;
 		a.fadecolor = fadecolor, a.clip = clip;
-		a.clipz0 = clipz0, a.clipz1 = clipz1;
 		a.center = Vec2i(centerx, centery);
 		
 		a.smoothing = smoothing;
-		a.Xsnap = Xsnap, a.Zsnap = Zsnap, a.Zdiv = Zdiv;
 		
-		a.clip3D = clip3D;
-		a.type = type;
 		a.bkgcolor = Color::fromBGRA(bkgcolor);
-		a.nbdrawn = nbdrawn;
 		a.cdepth = cdepth;
 		
 		a.size = size;
@@ -1126,36 +1095,46 @@ struct SavedCamera {
 	
 	inline SavedCamera & operator=(const EERIE_CAMERA & b) {
 		
-		transform = b.transform;
-		pos = b.pos;
-		Ycos = b.Ycos, Ysin = b.Ysin;
-		Xcos = b.Xcos, Xsin = b.Xsin;
-		Zcos = b.Zcos, Zsin = b.Zsin;
-		focal = b.focal, use_focal = b.use_focal;
-		Zmul = b.Zmul;
-		posleft = b.pos2.x, postop = b.pos2.y;
-		
+		transform = b.orgTrans;
+
+		//TODO Remove
+		pos = b.orgTrans.pos;
+		Ycos = b.orgTrans.ycos, Ysin = b.orgTrans.ysin;
+		Xcos = b.orgTrans.xcos, Xsin = b.orgTrans.xsin;
+		Zcos = b.orgTrans.zcos, Zsin = b.orgTrans.zsin;
+
+		use_focal = 0.f;
+
+		posleft = b.orgTrans.mod.x;
+		postop  = b.orgTrans.mod.y;
+
+		focal = b.focal;
+		Zmul = 0.f;
+
+
 		xmod = 0.f, ymod = 0.f;
-		matrix = b.matrix;
+		matrix = EERIEMATRIX();
 		angle = b.angle;
 		
 		d_pos = b.d_pos, d_angle = b.d_angle;
 		lasttarget = b.lasttarget, lastpos = b.lastpos;
 		translatetarget = b.translatetarget;
 		lastinfovalid = b.lastinfovalid;
-		norm = b.norm;
+		norm = Vec3f(0,0,0); //TODO Remove
 		fadecolor = b.fadecolor, clip = b.clip;
-		clipz0 = b.clipz0, clipz1 = b.clipz1;
+		clipz0 = 0.0f, clipz1 = 0.0f;
 		centerx = b.center.x, centery = b.center.y;
 		
 		smoothing = b.smoothing;
 		AddX = 0.f, AddY = 0.f;
-		Xsnap = b.Xsnap, Zsnap = b.Zsnap, Zdiv = b.Zdiv;
+		Xsnap = 0;
+		Zsnap = 0;
+		Zdiv = 0.f;
 		
-		clip3D = b.clip3D;
-		type = b.type;
+		clip3D = 0;
+		type = CAM_SUBJVIEW;
 		bkgcolor = b.bkgcolor.toBGRA();
-		nbdrawn = b.nbdrawn;
+		nbdrawn = 0;
 		cdepth = b.cdepth;
 		
 		size = b.size;

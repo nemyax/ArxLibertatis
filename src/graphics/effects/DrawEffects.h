@@ -50,13 +50,8 @@ ZeniMax Media Inc., Suite 120, Rockville, Maryland 20850 USA.
 class TextureContainer;
 struct EERIE_FACE;
 
-extern TextureContainer * lightsource_tc;
-
 bool ARX_DrawHalo(TextureContainer * _pTex, float _fPosX, float _fPosY, float _fWidth, float _fHeight, float _fR, float _fG, float _fB, float _fDecalX, float _fDecalY);
 void ARXDRAW_DrawInterShadows();
 void ARXDRAW_DrawPolyBoom();
-void ARXDRAW_DrawAllLights(long x0, long z0, long x1, long z1);
-void ARXDRAW_DrawEyeBall();
-void ARXDRAW_DrawAllTransPolysPos();
 
 #endif // ARX_GRAPHICS_EFFECTS_DRAWEFFECTS_H

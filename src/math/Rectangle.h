@@ -22,7 +22,7 @@
 
 #include <algorithm>
 
-#include "math/Vector2.h"
+#include "math/Vector.h"
 
 // name Rectangle is used in windows headers
 template<class T>
@@ -38,11 +38,11 @@ public:
 		T x;
 		T y;
 		
-		operator Vector2<T>() {
-			return Vector2<T>(x, y);
+		typename vec2_traits<T>::type toVec2() const {
+			return typename vec2_traits<T>::type(x, y);
 		}
 		
-		DummyVec2 & operator=(const Vector2<T> & vec) {
+		DummyVec2 & operator=(const typename vec2_traits<T>::type & vec) {
 			x = vec.x, y = vec.y;
 			return *this;
 		}
@@ -72,11 +72,14 @@ public:
 	
 	Rectangle_() { }
 	
-	Rectangle_(T _left, T _top, T _right, T _bottom) : left(_left), top(_top), right(_right), bottom(_bottom) { }
+	Rectangle_(T _left, T _top, T _right, T _bottom)
+		: left(_left), top(_top), right(_right), bottom(_bottom) { }
 	
-	Rectangle_(const Vector2<T> & _origin, T width = T(0), T height = T(0)) : left(_origin.x), top(_origin.y), right(_origin.x + width), bottom(_origin.y + height) { }
+	Rectangle_(const typename vec2_traits<T>::type & _origin, T width = T(0), T height = T(0))
+		: left(_origin.x), top(_origin.y), right(_origin.x + width), bottom(_origin.y + height) { }
 	
-	Rectangle_(const Vector2<T> & _origin, const Vector2<T> & _end) : left(_origin.x), top(_origin.y), right(_end.x), bottom(_end.y) { }
+	Rectangle_(const typename vec2_traits<T>::type & _origin, const typename vec2_traits<T>::type & _end)
+		: left(_origin.x), top(_origin.y), right(_end.x), bottom(_end.y) {}
 	
 	Rectangle_(T width, T height) : left(T(0)), top(T(0)), right(width), bottom(height) { }
 	
@@ -97,11 +100,11 @@ public:
 		return bottom - top;
 	}
 	
-	Rectangle_ operator+(const Vector2<T> & offset) const {
+	Rectangle_ operator+(const typename vec2_traits<T>::type & offset) const {
 		return Rectangle_(origin + offset, end + offset);
 	}
 	
-	Rectangle_ & operator+=(const Vector2<T> & offset) {
+	Rectangle_ & operator+=(const typename vec2_traits<T>::type & offset) {
 		origin += offset, end += offset;
 		return *this;
 	}
@@ -109,8 +112,8 @@ public:
 	void move(T dx, T dy) {
 		left += dx, top += dy, right += dx, bottom += dy;
 	}
-	
-	bool contains(const Vector2<T> & point) const {
+    
+	bool contains(const typename vec2_traits<T>::type & point) const {
 		return (point.x >= left && point.x < right && point.y >= top && point.y < bottom);
 	}
 	
@@ -131,7 +134,10 @@ public:
 	 * Assumes that both rectangles are valid.
 	 */
 	Rectangle_ operator&(const Rectangle_ & other) const {
-		Rectangle_ result(std::max(left, other.left), std::max(top, other.top), std::min(right, other.right), std::min(bottom, other.bottom));
+		Rectangle_ result(
+				std::max(left, other.left), std::max(top, other.top),
+				std::min(right, other.right), std::min(bottom, other.bottom)
+		);
 		if(result.left > result.right) {
 			result.left = result.right = T(0);
 		}
@@ -146,7 +152,10 @@ public:
 	 * Assumes that both rectangles are valid.
 	 */
 	Rectangle_ operator|(const Rectangle_ & other) const {
-		return Rectangle_(std::min(left, other.left), std::min(top, other.top), std::max(right, other.right), std::max(bottom, other.bottom));
+		return Rectangle_(
+			std::min(left, other.left), std::min(top, other.top),
+			std::max(right, other.right), std::max(bottom, other.bottom)
+		);
 	}
 	
 	bool empty() const {
@@ -157,8 +166,8 @@ public:
 		return (left <= right && top <= bottom);
 	}
 	
-	Vector2<T> center() const {
-		return Vector2<T>(left + (right - left) / 2, top + (bottom - top) / 2);
+	typename vec2_traits<T>::type center() const {
+		return typename vec2_traits<T>::type(left + (right - left) / 2, top + (bottom - top) / 2);
 	}
 	
 	static const Rectangle_ ZERO;

@@ -35,10 +35,10 @@ public:
 	OpenGLRenderer();
 	~OpenGLRenderer();
 	
-	void Initialize();
+	void initialize();
 	
-	void shutdown();
-	void reinit();
+	void beforeResize(bool wasOrIsFullscreen);
+	void afterResize();
 	
 	// Scene begin/end...
 	void BeginScene();
@@ -87,9 +87,6 @@ public:
 	
 	inline float GetMaxAnisotropy() const { return maximumAnisotropy; }
 	
-	// Utilities...
-	void DrawTexturedRect(float x, float y, float w, float h, float uStart, float vStart, float uEnd, float vEnd, Color color);
-	
 	VertexBuffer<TexturedVertex> * createVertexBufferTL(size_t capacity, BufferUsage usage);
 	VertexBuffer<SMY_VERTEX> * createVertexBuffer(size_t capacity, BufferUsage usage);
 	VertexBuffer<SMY_VERTEX3> * createVertexBuffer3(size_t capacity, BufferUsage usage);
@@ -105,9 +102,10 @@ public:
 		return reinterpret_cast<GLTextureStage *>(Renderer::GetTextureStage(textureStage));
 	}
 	
-	inline bool isInitialized() { return initialized; }
-	
 private:
+	
+	void shutdown();
+	void reinit();
 	
 	bool useVertexArrays;
 	bool useVBOs;
@@ -140,8 +138,6 @@ private:
 	
 	typedef boost::intrusive::list<GLTexture2D, boost::intrusive::constant_time_size<false> > TextureList;
 	TextureList textures;
-
-	bool initialized;
 	
 };
 

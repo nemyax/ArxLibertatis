@@ -44,8 +44,10 @@ ZeniMax Media Inc., Suite 120, Rockville, Maryland 20850 USA.
 #ifndef ARX_ANIMATION_ANIMATIONRENDER_H
 #define ARX_ANIMATION_ANIMATIONRENDER_H
 
+#include "graphics/BaseGraphicsTypes.h"
 #include "graphics/Color.h"
-#include "math/MathFwd.h"
+#include "graphics/Math.h"
+#include "math/Types.h"
 
 struct EERIE_3DOBJ;
 struct ANIM_USE;
@@ -54,11 +56,51 @@ struct EERIEMATRIX;
 struct EERIE_QUAT;
 struct TexturedVertex;
 
-void Cedric_AnimateDrawEntity(EERIE_3DOBJ * eobj, ANIM_USE * animuse, Anglef * angle, Vec3f * pos, Entity * io, bool render, bool update_movement);
+float Cedric_GetInvisibility(Entity *io);
+
+void Cedric_ApplyLightingFirstPartRefactor(Entity *io);
+
+void PopAllTriangleList();
+void PopAllTriangleListTransparency();
 
 void ARX_DrawPrimitive(TexturedVertex *, TexturedVertex *, TexturedVertex *, float _fAdd = 0.0f);
 
-void MakeCLight(Entity * io, Color3f * infra, Anglef * angle, Vec3f * pos, EERIE_3DOBJ * eobj, EERIEMATRIX * BIGMAT, EERIE_QUAT * BIGQUAT);
-void MakeCLight2(Entity * io, Color3f * infra, Anglef * angle, Vec3f * pos, EERIE_3DOBJ * eobj, EERIEMATRIX * BIGMAT, EERIE_QUAT * BIGQUAT, long i);
+struct TransformInfo {
+
+	Vec3f pos;
+	EERIE_QUAT rotation;
+	float scale;
+	Vec3f offset;
+
+	TransformInfo()
+		: pos(Vec3f_ZERO)
+		, scale(1.f)
+		, offset(Vec3f_ZERO)
+	{
+		Quat_Init(&rotation);
+	}
+
+	TransformInfo(Vec3f pos, EERIE_QUAT rotation, float scale = 1.f, Vec3f offset = Vec3f_ZERO)
+		: pos(pos)
+		, rotation(rotation)
+		, scale(scale)
+		, offset(offset)
+	{}
+};
+
+void UpdateBbox2d(EERIE_3DOBJ *eobj, EERIE_2D_BBOX & box2D);
+
+void DrawEERIEInter_ModelTransform(EERIE_3DOBJ *eobj, const TransformInfo &t);
+void DrawEERIEInter_ViewProjectTransform(EERIE_3DOBJ *eobj);
+
+void DrawEERIEInter_Render(EERIE_3DOBJ *eobj, const TransformInfo &t, Entity *io, float invisibility = 0.f);
+void DrawEERIEInter(EERIE_3DOBJ *eobj, const TransformInfo & t, Entity *io, bool forceDraw = false, float invisibility = 0.f);
+
+void EERIEDrawAnimQuatUpdate(EERIE_3DOBJ *eobj, ANIM_USE * animlayer,const Anglef & angle, const Vec3f & pos, unsigned long time, Entity *io, bool update_movement);
+void EERIEDrawAnimQuatRender(EERIE_3DOBJ *eobj, const Vec3f & pos, Entity *io, bool render, float invisibility);
+
+void EERIEDrawAnimQuat(EERIE_3DOBJ *eobj, ANIM_USE * animlayer, const Anglef & angle, const Vec3f & pos, unsigned long time, Entity *io, bool render = true, bool update_movement = true, float invisibility = 0.f);
+void AnimatedEntityUpdate(Entity * entity, float time);
+void AnimatedEntityRender(Entity * entity, float invisibility);
 
 #endif // ARX_ANIMATION_ANIMATIONRENDER_H
