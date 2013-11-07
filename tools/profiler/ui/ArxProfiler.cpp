@@ -130,7 +130,7 @@ void ArxProfiler::openFile() {
 		}
 
 		ThreadInfo                  info;
-		std::vector<qint64>         currentStack;
+		std::vector<quint64>        currentStack;
 		std::vector<ProfilePoint>   profilePoints;
 		quint32                     maxDepth;
 
@@ -230,7 +230,7 @@ void ArxProfiler::openFile() {
 
 		for(std::vector<ProfilePoint>::const_reverse_iterator it = threadData.profilePoints.rbegin(); it != threadData.profilePoints.rend(); ++it) {
 
-			std::vector<qint64>& threadStack = threadData.currentStack;
+			std::vector<quint64>& threadStack = threadData.currentStack;
 			while(!threadStack.empty()) {
 				if(it->endTime <= threadStack.back()) {
 					threadStack.pop_back();
