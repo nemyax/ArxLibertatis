@@ -31,6 +31,9 @@
 #include <map>
 #include <vector>
 
+#define BOOST_DATE_TIME_NO_LIB
+#include <boost/date_time.hpp>
+
 class Profiler {
 
 public:
@@ -127,18 +130,8 @@ private:
 
 private:
 	void writeProfileLog() {
-		/*
-		// libboost_date_time ? NO WAY!
-		std::string dateTime = boost::posix_time::to_iso_extended_string(boost::posix_time::second_clock::local_time());
-		std::replace(dateTime.begin(), dateTime.end(), ' ', '.');
-		std::replace(dateTime.begin(), dateTime.end(), '-', '.');
-		std::replace(dateTime.begin(), dateTime.end(), ':', '.');
-		std::replace(dateTime.begin(), dateTime.end(), 'T', '.'); // boost date-time separator is 'T'
-
-		std::string filename = "arx-" + dateTime + ".perf";
-		*/
 		
-		std::string filename = "arx-dateTime.perf"; // TODO......
+		std::string filename = getDateTimeString() + ".perf";
 		fs::ofstream out(fs::path(filename), std::ios::binary | std::ios::out);
 
 		u32 numItems;
@@ -181,21 +174,11 @@ private:
 	}
 
 	void writeRecordedVariables() {
-		/*
-		// libboost_date_time ? NO WAY!
-		std::string dateTime = boost::posix_time::to_iso_extended_string(boost::posix_time::second_clock::local_time());
-		std::replace(dateTime.begin(), dateTime.end(), ' ', '.');
-		std::replace(dateTime.begin(), dateTime.end(), '-', '.');
-		std::replace(dateTime.begin(), dateTime.end(), ':', '.');
-		std::replace(dateTime.begin(), dateTime.end(), 'T', '.'); // boost date-time separator is 'T'
-
-		std::string filename = "arx-" + dateTime + ".csv";
-		*/
-
+		
 		if(recordedVariables.empty())
 			return;
 
-		std::string filename = "arx-dateTime.csv";
+		std::string filename = getDateTimeString() + ".csv";
 		fs::ofstream out(fs::path(filename), std::ios::out);
 
 		u32 maxNumEntries = 0;
@@ -228,6 +211,24 @@ private:
 			}
 			out << std::endl;
 		}
+	}
+
+	std::string getDateTimeString() const {
+		boost::posix_time::ptime localTime = boost::posix_time::second_clock::local_time();
+		boost::gregorian::date::ymd_type ymd = localTime.date().year_month_day();
+		boost::posix_time::time_duration hms = localTime.time_of_day();
+
+		std::stringstream localTimeString;
+		localTimeString << std::setfill('0') 
+		                << ymd.year << "." 
+		                << std::setw(2)
+		                << ymd.month.as_number() << "." 
+		                << ymd.day.as_number() << "-" 
+		                << hms.hours() << "." 
+		                << hms.minutes() << "." 
+		                << hms.seconds();
+
+		return localTimeString.str();
 	}
 
 private:
