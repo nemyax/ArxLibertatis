@@ -12,7 +12,7 @@
 #include <QGraphicsSimpleTextItem>
 #include <QHash>
 
-ArxProfiler::ArxProfiler(QWidget *parent, Qt::WFlags flags)
+ArxProfiler::ArxProfiler(QWidget *parent, Qt::WindowFlags flags)
 	: QMainWindow(parent, flags) {
 	ui.setupUi(this);
 
@@ -50,15 +50,15 @@ class QGraphicsProfilePoint : public QGraphicsRectItem
     }
 
 public:
-	QGraphicsProfilePoint(QGraphicsItem *parent = 0, QGraphicsScene *scene = 0) : QGraphicsRectItem(parent, scene)
+	QGraphicsProfilePoint(QGraphicsItem *parent = 0) : QGraphicsRectItem(parent)
 	{
 	}
     
-	QGraphicsProfilePoint(const QRectF &rect, QGraphicsItem *parent = 0, QGraphicsScene *scene = 0) : QGraphicsRectItem(rect, parent, scene)
+	QGraphicsProfilePoint(const QRectF &rect, QGraphicsItem *parent = 0) : QGraphicsRectItem(rect, parent)
 	{
 	}
     
-	QGraphicsProfilePoint(qreal x, qreal y, qreal w, qreal h, QGraphicsItem *parent = 0, QGraphicsScene *scene = 0) : QGraphicsRectItem(x, y, w, h, parent, scene)
+	QGraphicsProfilePoint(qreal x, qreal y, qreal w, qreal h, QGraphicsItem *parent = 0) : QGraphicsRectItem(x, y, w, h, parent)
 	{
 	}
     
@@ -95,7 +95,7 @@ private:
 
 class QGraphicsHud : public QGraphicsItem {
 public:
-	QGraphicsHud() : QGraphicsItem(0, 0) {
+	QGraphicsHud() : QGraphicsItem(0) {
 	}
 
 protected:
@@ -172,7 +172,7 @@ void ArxProfiler::openFile() {
 
 		// TODO: String table ftw
 		ProfilePoint point;
-		point.tag = QString::fromAscii(data, len);
+		point.tag = QString::fromLatin1(data, len);
         data += len;
 		
         point.threadId = *(unsigned int*)data;

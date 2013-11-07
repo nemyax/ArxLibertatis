@@ -1,9 +1,9 @@
 #ifndef ARXPROFILER_H
 #define ARXPROFILER_H
 
-#include <QtGui/QMainWindow>
-#include <QtGui/QGraphicsView>
-#include <QtGui/QGraphicsRectItem>
+#include <QMainWindow>
+#include <QGraphicsView>
+#include <QGraphicsRectItem>
 
 #include "ui_arxprofiler.h"
 
@@ -42,7 +42,7 @@ class ArxProfiler : public QMainWindow {
 	Q_OBJECT
 
 public:
-	ArxProfiler(QWidget *parent = 0, Qt::WFlags flags = 0);
+	ArxProfiler(QWidget *parent = 0, Qt::WindowFlags flags = 0);
 	~ArxProfiler();
 
 private slots:
@@ -52,7 +52,5 @@ private:
 	Ui::ArxProfilerClass ui;
     ProfilerView* view;
 };
-
-
 
 #endif // ARXPROFILER_H
