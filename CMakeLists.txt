@@ -754,6 +754,9 @@ set(PLATFORM_CRASHHANDLER_IMPL_SOURCES src/platform/crashhandler/CrashHandlerImp
 set(PLATFORM_CRASHHANDLER_POSIX_SOURCES src/platform/crashhandler/CrashHandlerPOSIX.cpp)
 set(PLATFORM_CRASHHANDLER_WINDOWS_SOURCES src/platform/crashhandler/CrashHandlerWindows.cpp)
 
+# Profiler sources
+set(PLATFORM_PROFILER_SOURCES src/platform/profiler/Profiler.cpp)
+
 set(SCENE_SOURCES
 	src/scene/ChangeLevel.cpp
 	src/scene/CinematicSound.cpp
@@ -940,6 +943,7 @@ set(ARX_SOURCES
 	${PLATFORM_SOURCES}
 	${PLATFORM_EXTRA_SOURCES}
 	${PLATFORM_CRASHHANDLER_SOURCES}
+	${PLATFORM_PROFILER_SOURCES}
 	${SCENE_SOURCES}
 	${SCRIPT_SOURCES}
 	${UTIL_SOURCES}
