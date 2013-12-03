@@ -19,6 +19,8 @@
 
 #include "GLRenderTexture.h"
 
+#include "graphics/opengl/GLVertexBuffer.h"
+
 GLRenderTexture::GLRenderTexture(Vec2s size) {
 
 	m_size = size;
@@ -147,7 +149,7 @@ void GLBatch::render(Rect viewport) {
 
 
 	glEnableVertexAttribArray(m_shader.attribute_v_coord_postproc);
-	glBindBuffer(GL_ARRAY_BUFFER, vbo_fbo_vertices);
+	bindBuffer(vbo_fbo_vertices);
 	glVertexAttribPointer(
 				m_shader.attribute_v_coord_postproc,  // attribute
 				2,                  // number of elements per vertex, here (x,y)
@@ -159,6 +161,7 @@ void GLBatch::render(Rect viewport) {
 
 	glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
 
+	unbindBuffer(vbo_fbo_vertices);
 	glDisableVertexAttribArray(m_shader.attribute_v_coord_postproc);
 
 	glUseProgram(oldProgram);
